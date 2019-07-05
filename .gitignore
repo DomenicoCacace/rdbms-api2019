@@ -22,7 +22,6 @@
 
 # Executables
 *.exe
-*.out
 *.app
 *.i*86
 *.x86_64
@@ -30,3 +29,11 @@
 
 # Debug files
 *.dSYM/
+
+# Main executable
+main
+
+# CLion files, because it's easier for debugging
+cmake-build-debug/
+CMakeLists.txt
+.idea/
