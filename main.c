@@ -1,16 +1,21 @@
 #include <stdio.h>
 #include <string.h>
+// --- GLOBAL VARIABLES AND CONSTANTS ---
 
+//TODO: test different prime numbers to find the best ones
+#define HASH_SIZE_ENT 113
+#define HASH_MULTIPLIER 51
+
+// ---FUNCTIONS PROTOTYPES ---
 int getCommand(char*, char*, char*, char*);
+unsigned int hash(char*, int, int);
 
 int main(){
-
 
 }
 
 
 /*
- *
  * int getCommand(char* command, char* ent1, char* ent2, char* rel)
  *
  * probably the worst parser you'll ever see
@@ -27,7 +32,7 @@ int main(){
  * ent2: the second entity fount, used in addrel and delrel
  * rel: the relationship between ent1 and ent2, used in addrel and delrel
  *
- * -- RETURN VALUES ---
+ * --- RETURN VALUES ---
  * 1: if the function is parsing the last line, containing only the string 'end'
  * 0: in any other case
  */
@@ -82,4 +87,36 @@ int getCommand(char* command, char* ent1, char* ent2, char* rel) {
 
   while(getchar() != '\n'){}  //dump any other character. You don't wanna remove this
   return 0;
+}
+
+/*
+ * unsigned int hash(char* string, int mult, int mod)
+ *
+ * just a hash function that hopefully won't need more space than this
+ *
+ * --- DESCRIPTION ---
+ * this is a basic string hashing function, that sums the ASCII values of every single
+ * character in the string, each multiplied by the i-th power of a multiplier, where i is the
+ * position of the char in the string. Both the multiplayer and the modulus must be prime to
+ * ensure an acceptable collision rate, on average
+ *
+ * --- PARAMETERS ---
+ * string: the input string to be analyzed and hashed
+ * mult: the multiplier, see above
+ * mod: the divider, see below
+ *
+ * --- RETURN VALUES ---
+ * the function returns the remaindr of the division of the weighted sum of the ASCII values and
+ * the divider
+ */
+
+unsigned int hash(char* string, int mult, int mod) {
+  unsigned int result = string[0] - '_';
+  int i = 1;
+  while(string[i] != '\0') {
+    result = mult*(string[i] - '_' + result);
+    i++;
+  }
+  return result % mod;
+
 }
