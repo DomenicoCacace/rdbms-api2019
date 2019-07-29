@@ -5,13 +5,32 @@
 //TODO: test different prime numbers to find the best ones
 #define HASH_SIZE_ENT 113
 #define HASH_MULTIPLIER 51
+#define  MAX_STRING_SIZE 100
 
 // ---FUNCTIONS PROTOTYPES ---
 int getCommand(char*, char*, char*, char*);
+void executeCommand(char*, char*, char*, char*);
+
+void addEntity(char*);
+void deleteEntity(char*);
+void addRelation(char*, char*, char*);
+void deleteRelation(char*, char*, char*);
+void printReport(void);
+
 unsigned int hash(char*, int, int);
 
 int main(){
+    char command[7],
+            entName1[MAX_STRING_SIZE],
+            entName2[MAX_STRING_SIZE],
+            relName[MAX_STRING_SIZE];
 
+    freopen("TestCases/1_Monotone/batch1.2.in", "r", stdin);      //redirecting standard input, used for debugging in CLion
+
+    while(getCommand(command, entName1, entName2, relName)) {
+        executeCommand(command, entName1, entName2, relName);
+    }
+    return 0;
 }
 
 
@@ -111,12 +130,47 @@ int getCommand(char* command, char* ent1, char* ent2, char* rel) {
  */
 
 unsigned int hash(char* string, int mult, int mod) {
-  unsigned int result = string[0] - '_';
-  int i = 1;
-  while(string[i] != '\0') {
-    result = mult*(string[i] - '_' + result);
-    i++;
-  }
-  return result % mod;
+    unsigned int result = string[0] - '_';
+    int i = 1;
+    while(string[i] != '\0') {
+        //result = mult * (string[i] - '_' + result); //probably exceeds the maximum integer size, should be tested on large strings
+        result = (mult * (string[i] - '_' + result) % mod);
+        i++;
+    }
+    return result /*% mod*/;
+}
 
+/*
+ * void executeCommand(char* command, char* ent1, char* ent2, char* rel)
+ *
+ * --- DESCRIPTION ---
+ * executes different commands based on the request, called in the main for every input line parsed
+ * not everytime all the parameters are used, it depends on the requested command
+ *
+ * --- PARAMETERS ---
+ * command: a 6-char-long string containing the command name, as parsed from the file
+ * ent1: the first entity name
+ * ent2: the second entity name
+ * rel: the relation name
+ *
+ * --- RETURN VALUES ---
+ * none
+ */
+void executeCommand(char* command, char* ent1, char* ent2, char* rel) {
+    if (!strcmp(command, "addent")) {
+        addEntity(ent1);
+        return;
+    } else if (!strcmp(command, "addrel")) {
+        addRelation(ent1, ent2, rel);
+        return;
+    } else if (!strcmp(command, "delent")) {
+        deleteEntity(ent1);
+        return;
+    } else if (!strcmp(command, "delrel")) {
+        deleteRelation(ent1, ent2, rel);
+        return;
+    } else if (!strcmp(command, "report")) {
+        printReport();
+        return;
+    }
 }
