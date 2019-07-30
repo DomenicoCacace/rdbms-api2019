@@ -1,5 +1,7 @@
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
+
 // --- GLOBAL VARIABLES AND CONSTANTS ---
 
 //TODO: test different prime numbers to find the best ones
@@ -7,7 +9,19 @@
 #define HASH_MULTIPLIER 51
 #define  MAX_STRING_SIZE 100
 
-// ---FUNCTIONS PROTOTYPES ---
+// --- DATA TYPES DEFINITIONS ---
+
+typedef struct _entity {
+    char name[MAX_STRING_SIZE];
+    struct _entity *next;
+}t_entity;
+
+typedef struct _entityAddr {
+    t_entity *address;
+}t_entityAddr;
+
+t_entityAddr entityTable[HASH_SIZE_ENT];
+// --- FUNCTIONS PROTOTYPES ---
 int getCommand(char*, char*, char*, char*);
 void executeCommand(char*, char*, char*, char*);
 
@@ -16,6 +30,9 @@ void deleteEntity(char*);
 void addRelation(char*, char*, char*);
 void deleteRelation(char*, char*, char*);
 void printReport(void);
+
+void addToEntList(t_entity*, char*);
+void delFromEntList(t_entityAddr*, char*);
 
 unsigned int hash(char*, int, int);
 
@@ -27,7 +44,7 @@ int main(){
 
     freopen("TestCases/1_Monotone/batch1.2.in", "r", stdin);      //redirecting standard input, used for debugging in CLion
 
-    while(getCommand(command, entName1, entName2, relName)) {
+    while(getCommand(command, entName1, entName2, relName) != 1) {
         executeCommand(command, entName1, entName2, relName);
     }
     return 0;
@@ -55,11 +72,11 @@ int main(){
  * 1: if the function is parsing the last line, containing only the string 'end'
  * 0: in any other case
  */
-int getCommand(char* command, char* ent1, char* ent2, char* rel) {
+int getCommand(char *command, char *ent1, char *ent2, char *rel) {
   int i, c = 0;
 
   for(i = 0; i < 6; i++)  //reading the first 6 chatacters, containing the command
-    command[i]=getchar();
+    command[i] = (char)getchar();
   command[6] = '\0';
 
   if(command[0] == 'e' &&   //if it encounters the last line, it cannot compare strings with
@@ -157,20 +174,64 @@ unsigned int hash(char* string, int mult, int mod) {
  * none
  */
 void executeCommand(char* command, char* ent1, char* ent2, char* rel) {
-    if (!strcmp(command, "addent")) {
+    if (strcmp(command, "addent") == 0) {
         addEntity(ent1);
         return;
-    } else if (!strcmp(command, "addrel")) {
+    } else if (strcmp(command, "addrel") == 0) {
         addRelation(ent1, ent2, rel);
         return;
-    } else if (!strcmp(command, "delent")) {
+    } else if (strcmp(command, "delent") == 0) {
         deleteEntity(ent1);
         return;
-    } else if (!strcmp(command, "delrel")) {
+    } else if (strcmp(command, "delrel") == 0) {
         deleteRelation(ent1, ent2, rel);
         return;
-    } else if (!strcmp(command, "report")) {
+    } else if (strcmp(command, "report") == 0) {
         printReport();
         return;
     }
+}
+
+/*
+ * adds a new entity to the table, if absent
+ */
+void addEntity(char* entName) {
+    unsigned int hashValue = hash(entName, HASH_MULTIPLIER, HASH_SIZE_ENT);
+    t_entity *temp = entityTable[hashValue].address;
+
+    while (temp != NULL) {
+        if (strcmp(temp->name, entName) != 0)    //element already exists
+            return;
+        temp = temp->next;
+    }
+
+    t_entity *newEnt = (t_entity*)malloc(sizeof(t_entity));
+    strcpy(newEnt->name, entName);
+    newEnt->next = entityTable[hashValue].address;
+    entityTable[hashValue].address = newEnt;
+}
+
+void deleteEntity(char* entName){
+    unsigned int hashValue = hash(entName, HASH_MULTIPLIER, HASH_SIZE_ENT);
+    t_entity *temp = entityTable[hashValue].address;
+
+    while (temp != NULL) {
+        if (strcmp(temp->name, entName) != 0) {    //element exists
+            strcpy(temp->name, "\0");
+            return;
+        }
+        temp = temp->next;
+    }
+}
+
+void addRelation(char* orig, char* dest, char* relName) {
+
+}
+
+void deleteRelation(char* orig, char* dest, char* name) {
+
+}
+
+void printReport(void) {
+
 }
