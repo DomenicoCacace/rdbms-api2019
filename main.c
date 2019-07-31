@@ -6,6 +6,7 @@
 
 //TODO: test different prime numbers to find the best ones
 #define HASH_SIZE_ENT 113
+#define HASH_SIZE_REL 113
 #define HASH_MULTIPLIER 51
 #define  MAX_STRING_SIZE 100
 
@@ -14,13 +15,39 @@
 typedef struct _entity {
     char name[MAX_STRING_SIZE];
     struct _entity *next;
-}t_entity;
+} t_entity;
 
 typedef struct _entityAddr {
     t_entity *address;
-}t_entityAddr;
+} t_entityAddr;
+
+typedef struct _senderList {
+    t_entity *address;
+    struct _senderList *next;
+} t_senderList;
+
+typedef struct _relInstance {
+    struct _relInstance *rightChild;
+    struct _relInstance *leftChild;
+    //may need to add father and balancing attributes
+
+    t_entity *recipient;
+    t_senderList *senderList;
+} t_relInstance;
+
+typedef struct _relation {
+    char name[MAX_STRING_SIZE];
+    t_relInstance *root;
+    struct _relation *next;
+} t_relation;
+
+typedef struct _relAddr {
+    t_relation *address;
+} t_relAddr;
 
 t_entityAddr entityTable[HASH_SIZE_ENT];
+t_relAddr   relTable[HASH_SIZE_REL];
+
 // --- FUNCTIONS PROTOTYPES ---
 int getCommand(char*, char*, char*, char*);
 void executeCommand(char*, char*, char*, char*);
@@ -31,8 +58,8 @@ void addRelation(char*, char*, char*);
 void deleteRelation(char*, char*, char*);
 void printReport(void);
 
-void addToEntList(t_entity*, char*);
-void delFromEntList(t_entityAddr*, char*);
+t_entity *getEntityAddr(t_entity*, char*);
+t_relInstance *addTreeNode(t_relInstance*, t_entity*, t_entity*);
 
 unsigned int hash(char*, int, int);
 
@@ -211,6 +238,10 @@ void addEntity(char* entName) {
     entityTable[hashValue].address = newEnt;
 }
 
+/*
+ * looks for an entity. If found, it marks it as deleted changing i
+ * its name to "\0", to avoid possible collisions with the other entities names
+ */
 void deleteEntity(char* entName){
     unsigned int hashValue = hash(entName, HASH_MULTIPLIER, HASH_SIZE_ENT);
     t_entity *temp = entityTable[hashValue].address;
@@ -224,7 +255,37 @@ void deleteEntity(char* entName){
     }
 }
 
+
 void addRelation(char* orig, char* dest, char* relName) {
+    unsigned int hashValue;
+
+    hashValue= hash(orig, HASH_MULTIPLIER, HASH_SIZE_ENT);
+    t_entity *senderAddr = getEntityAddr(entityTable[hashValue].address, orig);
+    hashValue = hash(dest, HASH_MULTIPLIER, HASH_SIZE_ENT);
+    t_entity *recipientAddr = getEntityAddr(entityTable[hashValue].address, dest);
+    if(senderAddr != NULL && recipientAddr != NULL) {   //checks if the entities have been created
+        if (strcmp(senderAddr->name, "\0") != 0 && strcmp(recipientAddr->name, "\0") != 0) {    //checks if the entities have not been deleted
+
+            hashValue = hash(relName, HASH_MULTIPLIER, HASH_SIZE_REL);
+            t_relation *temp = relTable[hashValue].address;
+
+            while (temp != NULL) {
+                if (strcmp(temp->name, relName) == 0) {   //element already exists
+                    temp->root = addTreeNode(temp->root, senderAddr, recipientAddr);
+                    return;
+                }
+                    temp = temp->next;
+            }
+
+            //adds a new relation type in the hash table
+            t_relation *newRel = (t_relation*)malloc(sizeof(t_relation));
+            strcpy(newRel->name, relName);
+            newRel->next = relTable[hashValue].address;
+            relTable[hashValue].address = newRel;
+            newRel->root = addTreeNode(newRel->root, senderAddr, recipientAddr);
+        }
+    }
+
 
 }
 
@@ -234,4 +295,51 @@ void deleteRelation(char* orig, char* dest, char* name) {
 
 void printReport(void) {
 
+}
+
+t_entity *getEntityAddr(t_entity *source, char *entName) {
+    t_entity *temp = source;
+
+    while (temp != NULL) {
+        if (strcmp(temp->name, entName) == 0)    //element already exists
+            return temp;
+        temp = temp->next;
+    }
+    return NULL;
+}
+
+t_relInstance *addTreeNode(t_relInstance *node, t_entity *sender, t_entity *recipient) {
+    if (node == NULL) { //the node doesn't exist
+        t_relInstance *newNode = (t_relInstance*)malloc(sizeof(t_relInstance));
+        newNode->rightChild = NULL;
+        newNode->leftChild = NULL;
+        newNode->recipient = recipient;
+
+        t_senderList *newListNode = (t_senderList*)malloc(sizeof(t_senderList));
+        newListNode->address = sender;
+        newListNode->next = NULL;
+        newNode->senderList = newListNode;
+
+        return newNode;
+    }
+    else if (node->recipient == recipient) {     //the node exists, checking the sender list to eventually add the new sender
+        t_senderList *temp = node->senderList;
+        while (temp != NULL) {
+            if (temp->address == sender)
+                return node;
+            temp = temp->next;
+        }
+        t_senderList *newSender = (t_senderList*)malloc(sizeof(t_senderList));
+        newSender->address = sender;
+        newSender->next = node->senderList;
+        node->senderList = newSender;
+
+    }
+    else {
+        if(strcmp(recipient->name, node->recipient->name) < 0)
+            node->leftChild = addTreeNode(node->leftChild, sender, recipient);
+        else if (strcmp(recipient->name, node->recipient->name) > 0)
+            node->rightChild = addTreeNode(node->rightChild, sender, recipient);
+    }
+    return node;
 }
