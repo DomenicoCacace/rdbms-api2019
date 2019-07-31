@@ -5,7 +5,7 @@
 // --- GLOBAL VARIABLES AND CONSTANTS ---
 
 //TODO: test different prime numbers to find the best ones
-#define HASH_SIZE_ENT 113
+#define HASH_SIZE_ENT 512
 #define HASH_SIZE_REL 113
 #define HASH_MULTIPLIER 51
 #define  MAX_STRING_SIZE 100
@@ -47,6 +47,7 @@ typedef struct _relAddr {
 
 t_entityAddr entityTable[HASH_SIZE_ENT];
 t_relAddr   relTable[HASH_SIZE_REL];
+t_senderList *queue;
 
 // --- FUNCTIONS PROTOTYPES ---
 int getCommand(char*, char*, char*, char*);
@@ -60,6 +61,14 @@ void printReport(void);
 
 t_entity *getEntityAddr(t_entity*, char*);
 t_relInstance *addTreeNode(t_relInstance*, t_entity*, t_entity*);
+void delTreeNode(t_relInstance*, t_entity*, t_entity*);
+
+void push(t_entity*);
+t_senderList *pop();
+void emptyQueue();
+int printQueue();
+void getMaxSender(t_relInstance*, int*);
+int countListElements(t_senderList*);
 
 unsigned int hash(char*, int, int);
 
@@ -69,7 +78,7 @@ int main(){
             entName2[MAX_STRING_SIZE],
             relName[MAX_STRING_SIZE];
 
-    freopen("TestCases/1_Monotone/batch1.2.in", "r", stdin);      //redirecting standard input, used for debugging in CLion
+    //freopen("TestCases/1_Monotone/batch1.2.in", "r", stdin);      //redirecting standard input, used for debugging in CLion1
 
     while(getCommand(command, entName1, entName2, relName) != 1) {
         executeCommand(command, entName1, entName2, relName);
@@ -100,56 +109,56 @@ int main(){
  * 0: in any other case
  */
 int getCommand(char *command, char *ent1, char *ent2, char *rel) {
-  int i, c = 0;
+    int i = 0;
 
-  for(i = 0; i < 6; i++)  //reading the first 6 chatacters, containing the command
-    command[i] = (char)getchar();
-  command[6] = '\0';
+    for(i = 0; i < 6; i++)  //reading the first 6 chatacters, containing the command
+        command[i] = (char)getchar();
+    command[6] = '\0';
 
-  if(command[0] == 'e' &&   //if it encounters the last line, it cannot compare strings with
-     command[1] == 'n' &&   //strcmp due to segfault, so it compares the first three characters
-     command[2] == 'd')     //of the command string
-     return 1;
-
-
-  ent1[0] = '\0'; //assigning NULL strings to avoid garbage in the parameters
-  ent2[0] = '\0';
-  rel[0] = '\0';
+    if(command[0] == 'e' &&   //if it encounters the last line, it cannot compare strings with
+       command[1] == 'n' &&   //strcmp due to segfault, so it compares the first three characters
+       command[2] == 'd')     //of the command string
+        return 1;
 
 
-  if(strcmp(command, "report") != 0){ //if the command is not a report, it requires at least one attribute to work
-    getchar();  //dump the space and quote before the attribute
-    getchar();  //not very elegant, but it works
-    i = 0;
-    do {
-      ent1[i] = getchar();
-      i++;
-    } while(ent1[i-1] != '"');
-    ent1[i-1] = '\0';
+    ent1[0] = '\0'; //assigning NULL strings to avoid garbage in the parameters
+    ent2[0] = '\0';
+    rel[0] = '\0';
 
-    if ((strcmp(command, "addrel") == 0) || (strcmp(command, "delrel") == 0)) { //if the command works on relatonships, it needs all three attributes
-      getchar();
-      getchar();
-      i = 0;
-      do {
-        ent2[i] = getchar();
-        i++;
-      } while(ent2[i-1] != '"');
-      ent2[i-1] = '\0';
 
-      getchar();
-      getchar();
-      i = 0;
-      do {
-        rel[i] = getchar();
-        i++;
-      } while(rel[i-1] != '"');
-      rel[i-1] = '\0';
+    if(strcmp(command, "report") != 0){ //if the command is not a report, it requires at least one attribute to work
+        getchar();  //dump the space and quote before the attribute
+        getchar();  //not very elegant, but it works
+        i = 0;
+        do {
+            ent1[i] = (char)getchar();
+            i++;
+        } while(ent1[i-1] != '"');
+        ent1[i-1] = '\0';
+
+        if ((strcmp(command, "addrel") == 0) || (strcmp(command, "delrel") == 0)) { //if the command works on relatonships, it needs all three attributes
+            getchar();
+            getchar();
+            i = 0;
+            do {
+                ent2[i] = (char)getchar();
+                i++;
+            } while(ent2[i-1] != '"');
+            ent2[i-1] = '\0';
+
+            getchar();
+            getchar();
+            i = 0;
+            do {
+                rel[i] = (char)getchar();
+                i++;
+            } while(rel[i-1] != '"');
+            rel[i-1] = '\0';
+        }
     }
-  }
 
-  while(getchar() != '\n'){}  //dump any other character. You don't wanna remove this
-  return 0;
+    while((char)getchar() != '\n'){}  //dump any other character. You don't wanna remove this
+    return 0;
 }
 
 /*
@@ -174,7 +183,7 @@ int getCommand(char *command, char *ent1, char *ent2, char *rel) {
  */
 
 unsigned int hash(char* string, int mult, int mod) {
-    unsigned int result = string[0] - '_';
+    unsigned int result = (int)string[0] - '_';
     int i = 1;
     while(string[i] != '\0') {
         //result = mult * (string[i] - '_' + result); //probably exceeds the maximum integer size, should be tested on large strings
@@ -284,17 +293,61 @@ void addRelation(char* orig, char* dest, char* relName) {
             relTable[hashValue].address = newRel;
             newRel->root = addTreeNode(newRel->root, senderAddr, recipientAddr);
         }
+
+    }else {
+        printf("rec: %s; send: %s\n", senderAddr->name, recipientAddr->name);
+        printf("rec: %s; send: %s\n", orig, dest);
     }
 
 
 }
 
-void deleteRelation(char* orig, char* dest, char* name) {
+void deleteRelation(char* orig, char* dest, char* relName) {
+    unsigned int hashValue;
 
+    hashValue= hash(orig, HASH_MULTIPLIER, HASH_SIZE_ENT);
+    t_entity *senderAddr = getEntityAddr(entityTable[hashValue].address, orig);
+    hashValue = hash(dest, HASH_MULTIPLIER, HASH_SIZE_ENT);
+    t_entity *recipientAddr = getEntityAddr(entityTable[hashValue].address, dest);
+
+    if(senderAddr != NULL && recipientAddr != NULL) {   //checks if the entities have been created
+        if (strcmp(senderAddr->name, "\0") != 0 &&
+            strcmp(recipientAddr->name, "\0") != 0) {    //checks if the entities have not been deleted
+
+            hashValue = hash(relName, HASH_MULTIPLIER, HASH_SIZE_REL);
+            t_relation *temp = relTable[hashValue].address;
+
+            while (temp != NULL) {
+                if (strcmp(temp->name, relName) == 0) {   //element exists
+                    delTreeNode(temp->root, senderAddr, recipientAddr);
+                    return;
+                }
+                temp = temp->next;
+            }
+        }
+    }
 }
 
 void printReport(void) {
+    int check = 0;
+    t_relation *temp;
+    for(int i = HASH_SIZE_REL; i > 0; i--) {
+         temp = relTable[i].address;
+         while (temp != NULL){
+             emptyQueue();
+             int max = 0;
+             getMaxSender(temp->root, &max);
+             printf("\"%s\"", temp->name);
+             check += printQueue(queue);
+             printf(" %d; ", max);
 
+             temp = temp->next;
+         }
+    }
+    if(check == 0)
+        printf("none");
+
+    printf("\n");
 }
 
 t_entity *getEntityAddr(t_entity *source, char *entName) {
@@ -343,3 +396,106 @@ t_relInstance *addTreeNode(t_relInstance *node, t_entity *sender, t_entity *reci
     }
     return node;
 }
+
+void delTreeNode(t_relInstance *node, t_entity *sender, t_entity *recipient) {
+    if (node == NULL)
+        return;
+    else if (node->recipient == recipient) {
+        t_senderList *curr = node->senderList;
+        if (node->senderList == NULL)
+            return;
+        if(node->senderList->address == sender) {
+            node->senderList = curr->next;
+            free(curr);
+            return;
+        }
+        t_senderList *prev = curr;
+        curr = curr->next;
+
+        while(curr != NULL) {
+            if(curr->address == sender) {
+                prev->next = curr->next;
+                free(curr);
+                return;
+            }
+            prev = curr;
+            curr = curr->next;
+        }
+    }
+    else {
+        if (strcmp(recipient->name, recipient) < 0)
+            delTreeNode(node->leftChild, sender, recipient);
+        else if (strcmp(recipient->name, recipient) > 0)
+            delTreeNode(node->rightChild, sender, recipient);
+    }
+}
+
+void push(t_entity *newEntity) {
+    t_senderList *newItem = (t_senderList*)malloc(sizeof(t_senderList));
+    newItem->address = newEntity;
+
+    newItem->next = queue;
+    queue = newItem;
+}
+
+t_senderList *pop() {
+    if (queue == NULL)
+        return NULL;
+    t_senderList *temp = queue;
+    queue = queue->next;
+    return temp;
+}
+
+void emptyQueue() {
+    if (queue == NULL)
+        return;
+    t_senderList *temp = pop(queue);
+    while(temp != NULL) {
+        free(temp);
+        temp = pop(queue);
+    }
+}
+
+int printQueue() {
+    if(queue == NULL)
+        return 0;
+
+    t_senderList *temp = pop(queue);
+    while (temp != NULL) {
+        printf(" \"%s\"", temp->address->name);
+        free(temp);
+        temp = pop(queue);
+    }
+    return 1;
+}
+
+void getMaxSender(t_relInstance *node, int *currMax) {
+    if (node != NULL) {
+        getMaxSender(node->rightChild, currMax);
+
+        int tempCount = countListElements(node->senderList);
+        if (tempCount == *(currMax)) {
+            push(node->recipient);
+        }
+        else if (tempCount > *(currMax)) {
+            *(currMax) = tempCount;
+            emptyQueue();
+            push(node->recipient);
+        }
+
+        getMaxSender(node->leftChild, currMax);
+    }
+}
+
+int countListElements(t_senderList *head) {
+    t_senderList *temp = head;
+    int counter = 0;
+
+    while(temp != NULL) {
+        if(strcmp(temp->address->name, "\0") != 0)
+            counter++;
+        temp = temp->next;
+    }
+    return counter;
+}
+
