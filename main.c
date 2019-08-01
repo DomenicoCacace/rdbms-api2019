@@ -5,8 +5,8 @@
 // --- GLOBAL VARIABLES AND CONSTANTS ---
 
 //TODO: test different prime numbers to find the best ones
-#define HASH_SIZE_ENT 512
-#define HASH_SIZE_REL 113
+#define HASH_SIZE_ENT 312
+#define HASH_SIZE_REL 312
 #define HASH_MULTIPLIER 51
 #define  MAX_STRING_SIZE 100
 
@@ -78,7 +78,7 @@ int main(){
             entName2[MAX_STRING_SIZE],
             relName[MAX_STRING_SIZE];
 
-    //freopen("TestCases/1_Monotone/batch1.2.in", "r", stdin);      //redirecting standard input, used for debugging in CLion1
+    freopen("TestCases/1_Monotone/batch1.1.in", "r", stdin);      //redirecting standard input, used for debugging in CLion
 
     while(getCommand(command, entName1, entName2, relName) != 1) {
         executeCommand(command, entName1, entName2, relName);
@@ -236,7 +236,7 @@ void addEntity(char* entName) {
     t_entity *temp = entityTable[hashValue].address;
 
     while (temp != NULL) {
-        if (strcmp(temp->name, entName) != 0)    //element already exists
+        if (strcmp(temp->name, entName) == 0)    //element already exists
             return;
         temp = temp->next;
     }
@@ -293,13 +293,7 @@ void addRelation(char* orig, char* dest, char* relName) {
             relTable[hashValue].address = newRel;
             newRel->root = addTreeNode(newRel->root, senderAddr, recipientAddr);
         }
-
-    }else {
-        printf("rec: %s; send: %s\n", senderAddr->name, recipientAddr->name);
-        printf("rec: %s; send: %s\n", orig, dest);
     }
-
-
 }
 
 void deleteRelation(char* orig, char* dest, char* relName) {
@@ -340,13 +334,11 @@ void printReport(void) {
              printf("\"%s\"", temp->name);
              check += printQueue(queue);
              printf(" %d; ", max);
-
              temp = temp->next;
          }
     }
     if(check == 0)
         printf("none");
-
     printf("\n");
 }
 
@@ -423,9 +415,9 @@ void delTreeNode(t_relInstance *node, t_entity *sender, t_entity *recipient) {
         }
     }
     else {
-        if (strcmp(recipient->name, recipient) < 0)
+        if (strcmp(recipient->name, node->recipient->name) < 0)
             delTreeNode(node->leftChild, sender, recipient);
-        else if (strcmp(recipient->name, recipient) > 0)
+        else if (strcmp(recipient->name, node->recipient->name) > 0)
             delTreeNode(node->rightChild, sender, recipient);
     }
 }
@@ -433,7 +425,7 @@ void delTreeNode(t_relInstance *node, t_entity *sender, t_entity *recipient) {
 void push(t_entity *newEntity) {
     t_senderList *newItem = (t_senderList*)malloc(sizeof(t_senderList));
     newItem->address = newEntity;
-
+    
     newItem->next = queue;
     queue = newItem;
 }
