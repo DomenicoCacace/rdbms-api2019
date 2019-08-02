@@ -41,13 +41,21 @@ typedef struct _relation {
     struct _relation *next;
 } t_relation;
 
+typedef struct _relationList {
+    t_relation *relationAddr;
+    t_senderList *senderList;
+    int counter;
+    struct _relationList *next;
+} t_relationList;
+
 typedef struct _relAddr {
     t_relation *address;
 } t_relAddr;
 
 t_entityAddr entityTable[HASH_SIZE_ENT];
 t_relAddr   relTable[HASH_SIZE_REL];
-t_senderList *queue;
+//t_senderList *queue;
+t_relationList *queue;
 
 // --- FUNCTIONS PROTOTYPES ---
 int getCommand(char*, char*, char*, char*);
@@ -63,16 +71,20 @@ t_entity *getEntityAddr(t_entity*, char*);
 t_relInstance *addTreeNode(t_relInstance*, t_entity*, t_entity*);
 void delTreeNode(t_relInstance*, t_entity*, t_entity*);
 
-void push(t_entity*);
-t_senderList *pop();
-void emptyQueue();
-int printQueue();
-void getMaxSender(t_relInstance*, int*);
+void push(t_relationList*, t_entity*);
+t_senderList *pop(t_relationList*);
+void emptyQueue(t_relationList*);
+int printQueue(t_relationList*);
+void getMaxSender(t_relationList*, t_relInstance*, int*);
 int countListElements(t_senderList*);
+void generatePrintQueues();
+
+void printOrderedLists();
 
 unsigned int hash(char*, int, int);
 
 int main(){
+    queue = NULL;
     char command[7],
             entName1[MAX_STRING_SIZE],
             entName2[MAX_STRING_SIZE],
@@ -323,23 +335,9 @@ void deleteRelation(char* orig, char* dest, char* relName) {
 }
 
 void printReport(void) {
-    int check = 0;
-    t_relation *temp;
-    for(int i = HASH_SIZE_REL; i > 0; i--) {
-         temp = relTable[i].address;
-         while (temp != NULL){
-             emptyQueue();
-             int max = 0;
-             getMaxSender(temp->root, &max);
-             printf("\"%s\"", temp->name);
-             check += printQueue(queue);
-             printf(" %d; ", max);
-             temp = temp->next;
-         }
-    }
-    if(check == 0)
-        printf("none");
-    printf("\n");
+    generatePrintQueues();
+    printOrderedLists();
+
 }
 
 t_entity *getEntityAddr(t_entity *source, char *entName) {
@@ -422,60 +420,63 @@ void delTreeNode(t_relInstance *node, t_entity *sender, t_entity *recipient) {
     }
 }
 
-void push(t_entity *newEntity) {
+void push(t_relationList *relList, t_entity *newEntity) {
     t_senderList *newItem = (t_senderList*)malloc(sizeof(t_senderList));
     newItem->address = newEntity;
     
-    newItem->next = queue;
-    queue = newItem;
+    newItem->next = relList->senderList;
+    relList->senderList = newItem;
 }
 
-t_senderList *pop() {
-    if (queue == NULL)
+t_senderList *pop(t_relationList *relList) {
+    if (relList->senderList == NULL)
         return NULL;
-    t_senderList *temp = queue;
-    queue = queue->next;
+    t_senderList *temp = relList->senderList;
+    relList->senderList = relList->senderList->next;
     return temp;
 }
 
-void emptyQueue() {
-    if (queue == NULL)
+void emptyQueue(t_relationList *relList) {
+    if (relList->senderList == NULL)
         return;
-    t_senderList *temp = pop(queue);
+    t_senderList *temp = pop(relList);
     while(temp != NULL) {
         free(temp);
-        temp = pop(queue);
+        temp = pop(relList);
     }
 }
 
-int printQueue() {
-    if(queue == NULL)
+int printQueue(t_relationList *relList) {
+    if(relList->senderList == NULL)
         return 0;
 
-    t_senderList *temp = pop(queue);
+    t_senderList *temp = pop(relList);
+    relList->counter = 0;
     while (temp != NULL) {
         printf(" \"%s\"", temp->address->name);
         free(temp);
-        temp = pop(queue);
+        temp = pop(relList);
+        relList->counter++;
     }
     return 1;
 }
 
-void getMaxSender(t_relInstance *node, int *currMax) {
+void getMaxSender(t_relationList *relList, t_relInstance *node, int *currMax) {
     if (node != NULL) {
-        getMaxSender(node->rightChild, currMax);
+        getMaxSender(relList, node->rightChild, currMax);
 
         int tempCount = countListElements(node->senderList);
+
         if (tempCount == *(currMax)) {
-            push(node->recipient);
+            push(relList, node->recipient);
         }
         else if (tempCount > *(currMax)) {
             *(currMax) = tempCount;
-            emptyQueue();
-            push(node->recipient);
+            emptyQueue(relList);
+            push(relList, node->recipient);
         }
 
-        getMaxSender(node->leftChild, currMax);
+        getMaxSender(relList, node->leftChild, currMax);
     }
 }
 
@@ -491,3 +492,68 @@ int countListElements(t_senderList *head) {
     return counter;
 }
 
+void printOrderedLists() {
+    int checker = 0;
+    t_relationList *temp = queue;
+    t_senderList *senders;
+
+    while (temp != NULL) {
+        printf("\"%s\"", temp->relationAddr->name);
+        senders = temp->senderList;
+        while (senders != NULL) {
+            printf(" \"%s\"", senders->address->name);
+            senders = senders->next;
+            free(temp->senderList);
+            temp->senderList = senders;
+            checker++;
+        }
+        printf (" %d; ", temp->counter);
+
+        temp = temp->next;
+        free(queue);
+        queue = temp;
+    }
+    if (checker == 0)
+        printf("none");
+    printf("\n");
+
+}
+
+void generatePrintQueues() {
+    int check = 0;
+    t_relation *temp;
+    for(int i = 0; i < HASH_SIZE_REL; i++) {
+        temp = relTable[i].address;
+        while (temp != NULL){
+            t_relationList *newNode = (t_relationList*)malloc(sizeof(t_relationList));
+            newNode->relationAddr = temp;
+            newNode->counter = 0;
+            newNode->senderList = NULL;
+            newNode->next = NULL;
+            getMaxSender(newNode, temp->root, &(newNode->counter));
+
+            t_relationList *prev, *curr;
+
+            if (queue != NULL) {
+                prev = NULL;
+                curr = queue;
+                while (curr != NULL && strcmp(newNode->relationAddr->name, curr->relationAddr->name) > 0) {
+                    prev = curr;
+                    curr = curr->next;
+                }
+                if (prev != NULL) {
+                    prev->next = newNode;
+                    newNode->next = curr;
+                }
+                else {
+                    newNode->next = queue;
+                    queue = newNode;
+                }
+            }
+            else {
+                queue = newNode;
+            }
+            temp = temp->next;
+        }
+    }
+}
