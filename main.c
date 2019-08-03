@@ -5,7 +5,7 @@
 // --- GLOBAL VARIABLES AND CONSTANTS ---
 
 //TODO: test different prime numbers to find the best ones
-#define HASH_SIZE_ENT 312
+#define HASH_SIZE_ENT 7854
 #define HASH_SIZE_REL 312
 #define HASH_MULTIPLIER 51
 #define  MAX_STRING_SIZE 100
@@ -54,7 +54,6 @@ typedef struct _relAddr {
 
 t_entityAddr entityTable[HASH_SIZE_ENT];
 t_relAddr   relTable[HASH_SIZE_REL];
-//t_senderList *queue;
 t_relationList *queue;
 
 // --- FUNCTIONS PROTOTYPES ---
@@ -81,6 +80,16 @@ void generatePrintQueues();
 
 void printOrderedLists();
 
+void printAllEntities() {
+    for (int i = 0; i < HASH_SIZE_ENT; i++) {
+        t_entity *temp = entityTable[i].address;
+        while(temp != NULL) {
+            printf("%s\n", temp->name);
+            temp = temp->next;
+        }
+    }
+}
+
 unsigned int hash(char*, int, int);
 
 int main(){
@@ -90,7 +99,7 @@ int main(){
             entName2[MAX_STRING_SIZE],
             relName[MAX_STRING_SIZE];
 
-    freopen("TestCases/1_Monotone/batch1.1.in", "r", stdin);      //redirecting standard input, used for debugging in CLion
+    freopen("TestCases/2_Dropoff/batch2.2.in", "r", stdin);      //redirecting standard input, used for debugging in CLion
 
     while(getCommand(command, entName1, entName2, relName) != 1) {
         executeCommand(command, entName1, entName2, relName);
@@ -268,8 +277,8 @@ void deleteEntity(char* entName){
     t_entity *temp = entityTable[hashValue].address;
 
     while (temp != NULL) {
-        if (strcmp(temp->name, entName) != 0) {    //element exists
-            strcpy(temp->name, "\0");
+        if (strcmp(temp->name, entName) == 0) {    //element exists
+            strcpy(temp->name, "");
             return;
         }
         temp = temp->next;
@@ -317,8 +326,8 @@ void deleteRelation(char* orig, char* dest, char* relName) {
     t_entity *recipientAddr = getEntityAddr(entityTable[hashValue].address, dest);
 
     if(senderAddr != NULL && recipientAddr != NULL) {   //checks if the entities have been created
-        if (strcmp(senderAddr->name, "\0") != 0 &&
-            strcmp(recipientAddr->name, "\0") != 0) {    //checks if the entities have not been deleted
+        if (strcmp(senderAddr->name, "") != 0 &&
+            strcmp(recipientAddr->name, "") != 0) {    //checks if the entities have not been deleted
 
             hashValue = hash(relName, HASH_MULTIPLIER, HASH_SIZE_REL);
             t_relation *temp = relTable[hashValue].address;
@@ -344,7 +353,7 @@ t_entity *getEntityAddr(t_entity *source, char *entName) {
     t_entity *temp = source;
 
     while (temp != NULL) {
-        if (strcmp(temp->name, entName) == 0)    //element already exists
+        if (strcmp(temp->name, entName) == 0 && strcmp(temp->name, "\0") != 0)    //element already exists
             return temp;
         temp = temp->next;
     }
@@ -388,8 +397,9 @@ t_relInstance *addTreeNode(t_relInstance *node, t_entity *sender, t_entity *reci
 }
 
 void delTreeNode(t_relInstance *node, t_entity *sender, t_entity *recipient) {
-    if (node == NULL)
+    if (node == NULL) {
         return;
+    }
     else if (node->recipient == recipient) {
         t_senderList *curr = node->senderList;
         if (node->senderList == NULL)
@@ -465,15 +475,17 @@ void getMaxSender(t_relationList *relList, t_relInstance *node, int *currMax) {
     if (node != NULL) {
         getMaxSender(relList, node->rightChild, currMax);
 
-        int tempCount = countListElements(node->senderList);
-
-        if (tempCount == *(currMax)) {
-            push(relList, node->recipient);
-        }
-        else if (tempCount > *(currMax)) {
-            *(currMax) = tempCount;
-            emptyQueue(relList);
-            push(relList, node->recipient);
+        if(strcmp(node->recipient->name, "") != 0) {
+            int tempCount = countListElements(node->senderList);
+            if(tempCount > 0) {
+                if (tempCount == *(currMax)) {
+                    push(relList, node->recipient);
+                } else if (tempCount > *(currMax)) {
+                    *(currMax) = tempCount;
+                    emptyQueue(relList);
+                    push(relList, node->recipient);
+                }
+            }
         }
 
         getMaxSender(relList, node->leftChild, currMax);
@@ -485,8 +497,9 @@ int countListElements(t_senderList *head) {
     int counter = 0;
 
     while(temp != NULL) {
-        if(strcmp(temp->address->name, "\0") != 0)
+        if(strcmp(temp->address->name, "") != 0) {
             counter++;
+        }
         temp = temp->next;
     }
     return counter;
@@ -498,16 +511,18 @@ void printOrderedLists() {
     t_senderList *senders;
 
     while (temp != NULL) {
-        printf("\"%s\"", temp->relationAddr->name);
-        senders = temp->senderList;
-        while (senders != NULL) {
-            printf(" \"%s\"", senders->address->name);
-            senders = senders->next;
-            free(temp->senderList);
-            temp->senderList = senders;
-            checker++;
+        if (temp->counter > 0) {
+            printf("\"%s\"", temp->relationAddr->name);
+            senders = temp->senderList;
+            while (senders != NULL) {
+                printf(" \"%s\"", senders->address->name);
+                senders = senders->next;
+                free(temp->senderList);
+                temp->senderList = senders;
+                checker++;
+            }
+            printf(" %d; ", temp->counter);
         }
-        printf (" %d; ", temp->counter);
 
         temp = temp->next;
         free(queue);
@@ -557,3 +572,5 @@ void generatePrintQueues() {
         }
     }
 }
+
+
