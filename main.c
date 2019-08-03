@@ -14,6 +14,7 @@
 
 typedef struct _entity {
     char name[MAX_STRING_SIZE];
+    unsigned int version;   //dispari se non esiste, pari altrimenti
     struct _entity *next;
 } t_entity;
 
@@ -23,6 +24,7 @@ typedef struct _entityAddr {
 
 typedef struct _senderList {
     t_entity *address;
+    unsigned short int version;
     struct _senderList *next;
 } t_senderList;
 
@@ -32,6 +34,7 @@ typedef struct _relInstance {
     //may need to add father and balancing attributes
 
     t_entity *recipient;
+    unsigned short int recVersion;
     t_senderList *senderList;
 } t_relInstance;
 
@@ -99,7 +102,7 @@ int main(){
             entName2[MAX_STRING_SIZE],
             relName[MAX_STRING_SIZE];
 
-    freopen("TestCases/2_Dropoff/batch2.2.in", "r", stdin);      //redirecting standard input, used for debugging in CLion
+    //freopen("TestCases/2_Dropoff/batch2.2.in", "r", stdin);      //redirecting standard input, used for debugging in CLion
 
     while(getCommand(command, entName1, entName2, relName) != 1) {
         executeCommand(command, entName1, entName2, relName);
@@ -257,8 +260,11 @@ void addEntity(char* entName) {
     t_entity *temp = entityTable[hashValue].address;
 
     while (temp != NULL) {
-        if (strcmp(temp->name, entName) == 0)    //element already exists
+        if (strcmp(temp->name, entName) == 0) {   //element already exists
+            if (temp->version % 2 != 0)
+                temp->version++;
             return;
+        }
         temp = temp->next;
     }
 
@@ -278,7 +284,8 @@ void deleteEntity(char* entName){
 
     while (temp != NULL) {
         if (strcmp(temp->name, entName) == 0) {    //element exists
-            strcpy(temp->name, "");
+            if(temp->version % 2 == 0)
+                temp->version++;
             return;
         }
         temp = temp->next;
@@ -294,7 +301,8 @@ void addRelation(char* orig, char* dest, char* relName) {
     hashValue = hash(dest, HASH_MULTIPLIER, HASH_SIZE_ENT);
     t_entity *recipientAddr = getEntityAddr(entityTable[hashValue].address, dest);
     if(senderAddr != NULL && recipientAddr != NULL) {   //checks if the entities have been created
-        if (strcmp(senderAddr->name, "\0") != 0 && strcmp(recipientAddr->name, "\0") != 0) {    //checks if the entities have not been deleted
+        if (senderAddr->version % 2 == 0 &&
+            recipientAddr->version % 2 == 0) {    //checks if the entities have not been deleted
 
             hashValue = hash(relName, HASH_MULTIPLIER, HASH_SIZE_REL);
             t_relation *temp = relTable[hashValue].address;
@@ -353,7 +361,7 @@ t_entity *getEntityAddr(t_entity *source, char *entName) {
     t_entity *temp = source;
 
     while (temp != NULL) {
-        if (strcmp(temp->name, entName) == 0 && strcmp(temp->name, "\0") != 0)    //element already exists
+        if (strcmp(temp->name, entName) == 0 /*&& strcmp(temp->name, "") != 0*/)    //element already exists
             return temp;
         temp = temp->next;
     }
@@ -366,9 +374,11 @@ t_relInstance *addTreeNode(t_relInstance *node, t_entity *sender, t_entity *reci
         newNode->rightChild = NULL;
         newNode->leftChild = NULL;
         newNode->recipient = recipient;
+        newNode->recVersion = recipient->version;
 
         t_senderList *newListNode = (t_senderList*)malloc(sizeof(t_senderList));
         newListNode->address = sender;
+        newListNode->version = sender->version;
         newListNode->next = NULL;
         newNode->senderList = newListNode;
 
@@ -376,6 +386,7 @@ t_relInstance *addTreeNode(t_relInstance *node, t_entity *sender, t_entity *reci
     }
     else if (node->recipient == recipient) {     //the node exists, checking the sender list to eventually add the new sender
         t_senderList *temp = node->senderList;
+        node->recVersion = recipient->version;
         while (temp != NULL) {
             if (temp->address == sender)
                 return node;
@@ -383,6 +394,7 @@ t_relInstance *addTreeNode(t_relInstance *node, t_entity *sender, t_entity *reci
         }
         t_senderList *newSender = (t_senderList*)malloc(sizeof(t_senderList));
         newSender->address = sender;
+        newSender->version = sender->version;
         newSender->next = node->senderList;
         node->senderList = newSender;
 
@@ -475,7 +487,7 @@ void getMaxSender(t_relationList *relList, t_relInstance *node, int *currMax) {
     if (node != NULL) {
         getMaxSender(relList, node->rightChild, currMax);
 
-        if(strcmp(node->recipient->name, "") != 0) {
+        if(node->recVersion == node->recipient->version && node->recVersion % 2 == 0) {
             int tempCount = countListElements(node->senderList);
             if(tempCount > 0) {
                 if (tempCount == *(currMax)) {
@@ -497,7 +509,7 @@ int countListElements(t_senderList *head) {
     int counter = 0;
 
     while(temp != NULL) {
-        if(strcmp(temp->address->name, "") != 0) {
+        if(temp->version == temp->address->version && temp->version % 2 == 0) {
             counter++;
         }
         temp = temp->next;
