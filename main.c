@@ -5,16 +5,16 @@
 // --- GLOBAL VARIABLES AND CONSTANTS ---
 
 //TODO: test different prime numbers to find the best ones
-#define HASH_SIZE_ENT 7854
-#define HASH_SIZE_REL 312
-#define HASH_MULTIPLIER 51
+#define HASH_SIZE_ENT 271
+#define HASH_SIZE_REL 271
+#define HASH_MULTIPLIER 31
 #define  MAX_STRING_SIZE 100
 
 // --- DATA TYPES DEFINITIONS ---
 
 typedef struct _entity {
     char name[MAX_STRING_SIZE];
-    unsigned int version;   //dispari se non esiste, pari altrimenti
+    unsigned short int version;   //dispari se non esiste, pari altrimenti
     struct _entity *next;
 } t_entity;
 
@@ -58,7 +58,6 @@ typedef struct _relAddr {
 t_entityAddr entityTable[HASH_SIZE_ENT];
 t_relAddr   relTable[HASH_SIZE_REL];
 t_relationList *queue;
-
 // --- FUNCTIONS PROTOTYPES ---
 int getCommand(char*, char*, char*, char*);
 void executeCommand(char*, char*, char*, char*);
@@ -82,12 +81,12 @@ int countListElements(t_senderList*);
 void generatePrintQueues();
 
 void printOrderedLists();
-
+int line;
 void printAllEntities() {
     for (int i = 0; i < HASH_SIZE_ENT; i++) {
         t_entity *temp = entityTable[i].address;
         while(temp != NULL) {
-            printf("%s\n", temp->name);
+            //printf("%s\n", temp->name);
             temp = temp->next;
         }
     }
@@ -96,16 +95,18 @@ void printAllEntities() {
 unsigned int hash(char*, int, int);
 
 int main(){
+    line = 0;
     queue = NULL;
     char command[7],
             entName1[MAX_STRING_SIZE],
             entName2[MAX_STRING_SIZE],
             relName[MAX_STRING_SIZE];
-
-    //freopen("TestCases/2_Dropoff/batch2.2.in", "r", stdin);      //redirecting standard input, used for debugging in CLion
+    freopen("TestCases/5_MultipleMixup/batch5.2.in", "r", stdin);      //redirecting standard input, used for debugging in CLion
 
     while(getCommand(command, entName1, entName2, relName) != 1) {
         executeCommand(command, entName1, entName2, relName);
+        line++;
+        //printf("%d\n", line);
     }
     return 0;
 }
@@ -136,7 +137,7 @@ int getCommand(char *command, char *ent1, char *ent2, char *rel) {
     int i = 0;
 
     for(i = 0; i < 6; i++)  //reading the first 6 chatacters, containing the command
-        command[i] = (char)getchar();
+        command[i] = (char)getchar_unlocked();
     command[6] = '\0';
 
     if(command[0] == 'e' &&   //if it encounters the last line, it cannot compare strings with
@@ -151,37 +152,46 @@ int getCommand(char *command, char *ent1, char *ent2, char *rel) {
 
 
     if(strcmp(command, "report") != 0){ //if the command is not a report, it requires at least one attribute to work
-        getchar();  //dump the space and quote before the attribute
-        getchar();  //not very elegant, but it works
-        i = 0;
+        getchar_unlocked();  //dump the space and quote before the attribute
+        getchar_unlocked();  //not very elegant, but it works
+        i = 1;
+        ent1[0] = '"';
         do {
-            ent1[i] = (char)getchar();
+            ent1[i] = (char)getchar_unlocked();
             i++;
         } while(ent1[i-1] != '"');
-        ent1[i-1] = '\0';
+        ent1[i-1] = '"';
+        ent1[i] = ' ';
+        ent1[i+1] = '\0';
 
         if ((strcmp(command, "addrel") == 0) || (strcmp(command, "delrel") == 0)) { //if the command works on relatonships, it needs all three attributes
-            getchar();
-            getchar();
-            i = 0;
+            getchar_unlocked();
+            getchar_unlocked();
+            i = 1;
+            ent2[0] = '"';
             do {
-                ent2[i] = (char)getchar();
+                ent2[i] = (char)getchar_unlocked();
                 i++;
             } while(ent2[i-1] != '"');
-            ent2[i-1] = '\0';
+            ent2[i-1] = '"';
+            ent2[i] = ' ';
+            ent2[i+1] = '\0';
 
-            getchar();
-            getchar();
-            i = 0;
+            getchar_unlocked();
+            getchar_unlocked();
+            i = 1;
+            rel[0] = '"';
             do {
-                rel[i] = (char)getchar();
+                rel[i] = (char)getchar_unlocked();
                 i++;
             } while(rel[i-1] != '"');
-            rel[i-1] = '\0';
+            rel[i-1] = '"';
+            rel[i] = ' ';
+            rel[i+1] = '\0';
         }
     }
 
-    while((char)getchar() != '\n'){}  //dump any other character. You don't wanna remove this
+    while((char)getchar_unlocked() != '\n'){}  //dump any other character. You don't wanna remove this
     return 0;
 }
 
@@ -207,14 +217,14 @@ int getCommand(char *command, char *ent1, char *ent2, char *rel) {
  */
 
 unsigned int hash(char* string, int mult, int mod) {
-    unsigned int result = (int)string[0] - '_';
-    int i = 1;
-    while(string[i] != '\0') {
+    unsigned long long result = (int)string[1] - '_';
+    int i = 2;
+    while(string[i] != ' ') {
         //result = mult * (string[i] - '_' + result); //probably exceeds the maximum integer size, should be tested on large strings
-        result = (mult * (string[i] - '_' + result) % mod);
+        result = (mult*result + (int)string[i] - '_');
         i++;
     }
-    return result /*% mod*/;
+    return result % mod;
 }
 
 /*
@@ -256,7 +266,7 @@ void executeCommand(char* command, char* ent1, char* ent2, char* rel) {
  * adds a new entity to the table, if absent
  */
 void addEntity(char* entName) {
-    unsigned int hashValue = hash(entName, HASH_MULTIPLIER, HASH_SIZE_ENT);
+    unsigned long hashValue = hash(entName, HASH_MULTIPLIER, HASH_SIZE_ENT);
     t_entity *temp = entityTable[hashValue].address;
 
     while (temp != NULL) {
@@ -270,6 +280,7 @@ void addEntity(char* entName) {
 
     t_entity *newEnt = (t_entity*)malloc(sizeof(t_entity));
     strcpy(newEnt->name, entName);
+    newEnt->version = 0;
     newEnt->next = entityTable[hashValue].address;
     entityTable[hashValue].address = newEnt;
 }
@@ -279,7 +290,7 @@ void addEntity(char* entName) {
  * its name to "\0", to avoid possible collisions with the other entities names
  */
 void deleteEntity(char* entName){
-    unsigned int hashValue = hash(entName, HASH_MULTIPLIER, HASH_SIZE_ENT);
+    unsigned long hashValue = hash(entName, HASH_MULTIPLIER, HASH_SIZE_ENT);
     t_entity *temp = entityTable[hashValue].address;
 
     while (temp != NULL) {
@@ -294,12 +305,13 @@ void deleteEntity(char* entName){
 
 
 void addRelation(char* orig, char* dest, char* relName) {
-    unsigned int hashValue;
+    unsigned long hashValue;
 
-    hashValue= hash(orig, HASH_MULTIPLIER, HASH_SIZE_ENT);
+    hashValue = hash(orig, HASH_MULTIPLIER, HASH_SIZE_ENT);
     t_entity *senderAddr = getEntityAddr(entityTable[hashValue].address, orig);
     hashValue = hash(dest, HASH_MULTIPLIER, HASH_SIZE_ENT);
     t_entity *recipientAddr = getEntityAddr(entityTable[hashValue].address, dest);
+
     if(senderAddr != NULL && recipientAddr != NULL) {   //checks if the entities have been created
         if (senderAddr->version % 2 == 0 &&
             recipientAddr->version % 2 == 0) {    //checks if the entities have not been deleted
@@ -320,13 +332,14 @@ void addRelation(char* orig, char* dest, char* relName) {
             strcpy(newRel->name, relName);
             newRel->next = relTable[hashValue].address;
             relTable[hashValue].address = newRel;
+            newRel->root = NULL;
             newRel->root = addTreeNode(newRel->root, senderAddr, recipientAddr);
         }
     }
 }
 
 void deleteRelation(char* orig, char* dest, char* relName) {
-    unsigned int hashValue;
+    unsigned long hashValue;
 
     hashValue= hash(orig, HASH_MULTIPLIER, HASH_SIZE_ENT);
     t_entity *senderAddr = getEntityAddr(entityTable[hashValue].address, orig);
@@ -334,19 +347,16 @@ void deleteRelation(char* orig, char* dest, char* relName) {
     t_entity *recipientAddr = getEntityAddr(entityTable[hashValue].address, dest);
 
     if(senderAddr != NULL && recipientAddr != NULL) {   //checks if the entities have been created
-        if (strcmp(senderAddr->name, "") != 0 &&
-            strcmp(recipientAddr->name, "") != 0) {    //checks if the entities have not been deleted
 
-            hashValue = hash(relName, HASH_MULTIPLIER, HASH_SIZE_REL);
-            t_relation *temp = relTable[hashValue].address;
+        hashValue = hash(relName, HASH_MULTIPLIER, HASH_SIZE_REL);
+        t_relation *temp = relTable[hashValue].address;
 
-            while (temp != NULL) {
-                if (strcmp(temp->name, relName) == 0) {   //element exists
-                    delTreeNode(temp->root, senderAddr, recipientAddr);
-                    return;
-                }
-                temp = temp->next;
+        while (temp != NULL) {
+            if (strcmp(temp->name, relName) == 0) {   //element exists
+                delTreeNode(temp->root, senderAddr, recipientAddr);
+                return;
             }
+            temp = temp->next;
         }
     }
 }
@@ -361,7 +371,7 @@ t_entity *getEntityAddr(t_entity *source, char *entName) {
     t_entity *temp = source;
 
     while (temp != NULL) {
-        if (strcmp(temp->name, entName) == 0 /*&& strcmp(temp->name, "") != 0*/)    //element already exists
+        if (strcmp(temp->name, entName) == 0)    //element already exists
             return temp;
         temp = temp->next;
     }
@@ -386,10 +396,18 @@ t_relInstance *addTreeNode(t_relInstance *node, t_entity *sender, t_entity *reci
     }
     else if (node->recipient == recipient) {     //the node exists, checking the sender list to eventually add the new sender
         t_senderList *temp = node->senderList;
-        node->recVersion = recipient->version;
+        if (recipient->version > node->recVersion) {
+            node->recipient->version = recipient->version;
+            node->recVersion = recipient->version;
+        }
         while (temp != NULL) {
-            if (temp->address == sender)
+            if (temp->address == sender) {
+                if (sender->version > temp->version) {
+                    temp->version = sender->version;
+                    temp->address->version = sender->version;
+                }
                 return node;
+            }
             temp = temp->next;
         }
         t_senderList *newSender = (t_senderList*)malloc(sizeof(t_senderList));
@@ -475,7 +493,8 @@ int printQueue(t_relationList *relList) {
     t_senderList *temp = pop(relList);
     relList->counter = 0;
     while (temp != NULL) {
-        printf(" \"%s\"", temp->address->name);
+        //printf(" \"%s\"", temp->address->name);
+        fputs(temp->address->name, stdout);
         free(temp);
         temp = pop(relList);
         relList->counter++;
@@ -487,7 +506,7 @@ void getMaxSender(t_relationList *relList, t_relInstance *node, int *currMax) {
     if (node != NULL) {
         getMaxSender(relList, node->rightChild, currMax);
 
-        if(node->recVersion == node->recipient->version && node->recVersion % 2 == 0) {
+        if(node->recVersion == node->recipient->version /*&& node->recVersion % 2 == 0*/) {
             int tempCount = countListElements(node->senderList);
             if(tempCount > 0) {
                 if (tempCount == *(currMax)) {
@@ -524,16 +543,16 @@ void printOrderedLists() {
 
     while (temp != NULL) {
         if (temp->counter > 0) {
-            printf("\"%s\"", temp->relationAddr->name);
+            fputs(temp->relationAddr->name, stdout);
             senders = temp->senderList;
             while (senders != NULL) {
-                printf(" \"%s\"", senders->address->name);
+                fputs(senders->address->name, stdout);
                 senders = senders->next;
                 free(temp->senderList);
                 temp->senderList = senders;
                 checker++;
             }
-            printf(" %d; ", temp->counter);
+            printf("%d; ", temp->counter);
         }
 
         temp = temp->next;
@@ -541,13 +560,12 @@ void printOrderedLists() {
         queue = temp;
     }
     if (checker == 0)
-        printf("none");
+        fputs("none", stdout);
     printf("\n");
 
 }
 
 void generatePrintQueues() {
-    int check = 0;
     t_relation *temp;
     for(int i = 0; i < HASH_SIZE_REL; i++) {
         temp = relTable[i].address;
