@@ -10,6 +10,8 @@
 #define HASH_MULTIPLIER 31
 #define  MAX_STRING_SIZE 100
 
+#define MAX(X, Y) (((X) > (Y)) ? (X) : (Y))
+
 // --- DATA TYPES DEFINITIONS ---
 
 typedef struct _entity {
@@ -31,6 +33,7 @@ typedef struct _senderList {
 typedef struct _relInstance {
     struct _relInstance *rightChild;
     struct _relInstance *leftChild;
+    int height;
     //may need to add father and balancing attributes
 
     t_entity *recipient;
@@ -80,6 +83,15 @@ void getMaxSender(t_relationList*, t_relInstance*, int*);
 int countListElements(t_senderList*);
 void generatePrintQueues();
 
+t_relInstance *doubleRotateLeft(t_relInstance*);
+t_relInstance *doubleRotateRight(t_relInstance*);
+t_relInstance *rotateLeft(t_relInstance*);
+t_relInstance *rotateRight(t_relInstance*);
+int max(int, int);
+
+int getBalance(t_relInstance*);
+int getHeight(t_relInstance*);
+
 void printOrderedLists();
 int line;
 void printAllEntities() {
@@ -105,7 +117,7 @@ int main(){
 
     while(getCommand(command, entName1, entName2, relName) != 1) {
         executeCommand(command, entName1, entName2, relName);
-        line++;
+        //line++;
         //printf("%d\n", line);
     }
     return 0;
@@ -384,6 +396,7 @@ t_relInstance *addTreeNode(t_relInstance *node, t_entity *sender, t_entity *reci
         newNode->rightChild = NULL;
         newNode->leftChild = NULL;
         newNode->recipient = recipient;
+        newNode->height = 0;
         newNode->recVersion = recipient->version;
 
         t_senderList *newListNode = (t_senderList*)malloc(sizeof(t_senderList));
@@ -393,8 +406,25 @@ t_relInstance *addTreeNode(t_relInstance *node, t_entity *sender, t_entity *reci
         newNode->senderList = newListNode;
 
         return newNode;
+    } else if(strcmp(recipient->name, node->recipient->name) < 0) {
+        node->leftChild = addTreeNode(node->leftChild, sender, recipient);
+        if(getBalance(node) > 1) {
+            if(strcmp(node->recipient->name, node->leftChild->recipient->name) < 0)
+                node = rotateLeft(node);
+            else
+                node = doubleRotateLeft(node);
+        }
     }
-    else if (node->recipient == recipient) {     //the node exists, checking the sender list to eventually add the new sender
+    else if (strcmp(recipient->name, node->recipient->name) > 0) {
+        node->rightChild = addTreeNode(node->rightChild, sender, recipient);
+        if (getBalance(node) > 1) {
+            if (strcmp(node->recipient->name, node->leftChild->recipient->name) < 0)
+                node = rotateRight(node);
+            else
+                node = doubleRotateRight(node);
+        }
+    }
+    else {
         t_senderList *temp = node->senderList;
         if (recipient->version > node->recVersion) {
             node->recipient->version = recipient->version;
@@ -415,16 +445,14 @@ t_relInstance *addTreeNode(t_relInstance *node, t_entity *sender, t_entity *reci
         newSender->version = sender->version;
         newSender->next = node->senderList;
         node->senderList = newSender;
+        return node;
+    }
 
-    }
-    else {
-        if(strcmp(recipient->name, node->recipient->name) < 0)
-            node->leftChild = addTreeNode(node->leftChild, sender, recipient);
-        else if (strcmp(recipient->name, node->recipient->name) > 0)
-            node->rightChild = addTreeNode(node->rightChild, sender, recipient);
-    }
+    node->height =  MAX(getHeight(node->rightChild), getHeight(node->leftChild));
     return node;
 }
+
+
 
 void delTreeNode(t_relInstance *node, t_entity *sender, t_entity *recipient) {
     if (node == NULL) {
@@ -484,22 +512,6 @@ void emptyQueue(t_relationList *relList) {
         free(temp);
         temp = pop(relList);
     }
-}
-
-int printQueue(t_relationList *relList) {
-    if(relList->senderList == NULL)
-        return 0;
-
-    t_senderList *temp = pop(relList);
-    relList->counter = 0;
-    while (temp != NULL) {
-        //printf(" \"%s\"", temp->address->name);
-        fputs(temp->address->name, stdout);
-        free(temp);
-        temp = pop(relList);
-        relList->counter++;
-    }
-    return 1;
 }
 
 void getMaxSender(t_relationList *relList, t_relInstance *node, int *currMax) {
@@ -603,4 +615,51 @@ void generatePrintQueues() {
     }
 }
 
+int getHeight(t_relInstance *node) {
+    if (node == NULL)
+        return -1;
+    return node->height;
+}
 
+int getBalance(t_relInstance *node) {
+    if (node == NULL)
+        return 0;
+    return getHeight(node->leftChild) - getHeight(node->rightChild);
+}
+
+int max(int x, int y) {
+    if (x > y)
+        return x;
+    return y;
+}
+
+t_relInstance *rotateRight(t_relInstance *node) {
+    t_relInstance *temp = node->rightChild;
+    node->rightChild = temp->leftChild;
+    temp->leftChild = node;
+
+    node->height = max(getHeight(node->leftChild), getHeight(node->rightChild)) + 1;
+    temp->height = max(getHeight(temp->leftChild), getHeight(node->rightChild)) + 1;
+    return temp;
+}
+
+t_relInstance *rotateLeft(t_relInstance *node) {
+    t_relInstance *temp = node->leftChild;
+    node->leftChild = temp->rightChild;
+    temp->rightChild = node;
+
+    node->height = max(getHeight(node->leftChild), getHeight(node->rightChild)) + 1;
+    temp->height = max(getHeight(temp->leftChild), getHeight(node->rightChild)) + 1;
+
+    return temp;
+}
+
+t_relInstance *doubleRotateRight(t_relInstance *node) {
+    node->rightChild = rotateLeft(node->rightChild);
+    return rotateRight(node);
+}
+
+t_relInstance *doubleRotateLeft(t_relInstance *node) {
+    node->leftChild = rotateRight(node->leftChild);
+    return rotateLeft(node);
+}
