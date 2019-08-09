@@ -113,7 +113,7 @@ int main(){
             entName1[MAX_STRING_SIZE],
             entName2[MAX_STRING_SIZE],
             relName[MAX_STRING_SIZE];
-    freopen("TestCases/5_MultipleMixup/batch5.2.in", "r", stdin);      //redirecting standard input, used for debugging in CLion
+    //freopen("TestCases/5_MultipleMixup/batch5.2.in", "r", stdin);      //redirecting standard input, used for debugging in CLion
 
     while(getCommand(command, entName1, entName2, relName) != 1) {
         executeCommand(command, entName1, entName2, relName);
@@ -425,6 +425,14 @@ t_relInstance *addTreeNode(t_relInstance *node, t_entity *sender, t_entity *reci
         }
     }
     else {
+        if (node->recVersion < recipient->version) {
+            t_senderList *temp = node->senderList;
+            while (temp != NULL) {
+                temp = temp->next;
+                free (node->senderList);
+                node->senderList = temp;
+            }
+        }
         t_senderList *temp = node->senderList;
         if (recipient->version > node->recVersion) {
             node->recipient->version = recipient->version;
@@ -448,7 +456,7 @@ t_relInstance *addTreeNode(t_relInstance *node, t_entity *sender, t_entity *reci
         return node;
     }
 
-    node->height =  MAX(getHeight(node->rightChild), getHeight(node->leftChild));
+    node->height =  max(getHeight(node->rightChild), getHeight(node->leftChild));
     return node;
 }
 
