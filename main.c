@@ -1,28 +1,24 @@
+// --- LIBRARIES ---
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
-// --- GLOBAL VARIABLES AND CONSTANTS ---
 
-//TODO: test different prime numbers to find the best ones
+// --- CONSTANTS ---
+
 #define HASH_SIZE_ENT 271
 #define HASH_SIZE_REL 271
 #define HASH_MULTIPLIER 31
 #define  MAX_STRING_SIZE 100
 
-#define MAX(X, Y) (((X) > (Y)) ? (X) : (Y))
 
 // --- DATA TYPES DEFINITIONS ---
 
 typedef struct _entity {
     char name[MAX_STRING_SIZE];
-    unsigned short int version;   //dispari se non esiste, pari altrimenti
+    unsigned short int version;   //odd if valid, even otherwise
     struct _entity *next;
-} t_entity;
-
-typedef struct _entityAddr {
-    t_entity *address;
-} t_entityAddr;
+} t_entity, *t_entityAddr;
 
 typedef struct _senderList {
     t_entity *address;
@@ -45,7 +41,7 @@ typedef struct _relation {
     char name[MAX_STRING_SIZE];
     t_relInstance *root;
     struct _relation *next;
-} t_relation;
+} t_relation, *t_relAddr;
 
 typedef struct _relationList {
     t_relation *relationAddr;
@@ -54,60 +50,56 @@ typedef struct _relationList {
     struct _relationList *next;
 } t_relationList;
 
-typedef struct _relAddr {
-    t_relation *address;
-} t_relAddr;
+
+// --- GLOBAL VARIABLES ---
 
 t_entityAddr entityTable[HASH_SIZE_ENT];
-t_relAddr   relTable[HASH_SIZE_REL];
+t_relAddr relTable[HASH_SIZE_REL];
 t_relationList *queue;
+
 // --- FUNCTIONS PROTOTYPES ---
+
+//Command parsing and execution
 int getCommand(char*, char*, char*, char*);
 void executeCommand(char*, char*, char*, char*);
-
 void addEntity(char*);
 void deleteEntity(char*);
 void addRelation(char*, char*, char*);
 void deleteRelation(char*, char*, char*);
 void printReport(void);
 
+//Relation insertion and deletion
 t_entity *getEntityAddr(t_entity*, char*);
-t_relInstance *addTreeNode(t_relInstance*, t_entity*, t_entity*);
-void delTreeNode(t_relInstance*, t_entity*, t_entity*);
+t_relInstance *addRelationInstance(t_relInstance *node, t_entity *sender, t_entity *recipient);
+void delRelationInstance(t_relInstance *node, t_entity *sender, t_entity *recipient);
 
+//Queue management
 void push(t_relationList*, t_entity*);
 t_senderList *pop(t_relationList*);
 void emptyQueue(t_relationList*);
-int printQueue(t_relationList*);
-void getMaxSender(t_relationList*, t_relInstance*, int*);
-int countListElements(t_senderList*);
-void generatePrintQueues();
 
+//Report printing and support
+void getMaxReceivers(t_relationList *relList, t_relInstance *node, int *currMax);
+int countListElements(t_senderList*);
+void assemblePrintQueues();
+void printOrderedLists();
+
+//AVL support
+int getBalance(t_relInstance*);
+int getHeight(t_relInstance*);
+
+// AVL rotation
 t_relInstance *doubleRotateLeft(t_relInstance*);
 t_relInstance *doubleRotateRight(t_relInstance*);
 t_relInstance *rotateLeft(t_relInstance*);
 t_relInstance *rotateRight(t_relInstance*);
+
+//misc
 int max(int, int);
+unsigned int hash(const char*, int, int);
 
-int getBalance(t_relInstance*);
-int getHeight(t_relInstance*);
-
-void printOrderedLists();
-int line;
-void printAllEntities() {
-    for (int i = 0; i < HASH_SIZE_ENT; i++) {
-        t_entity *temp = entityTable[i].address;
-        while(temp != NULL) {
-            //printf("%s\n", temp->name);
-            temp = temp->next;
-        }
-    }
-}
-
-unsigned int hash(char*, int, int);
 
 int main(){
-    line = 0;
     queue = NULL;
     char command[7],
             entName1[MAX_STRING_SIZE],
@@ -117,12 +109,15 @@ int main(){
 
     while(getCommand(command, entName1, entName2, relName) != 1) {
         executeCommand(command, entName1, entName2, relName);
-        //line++;
-        //printf("%d\n", line);
     }
     return 0;
 }
 
+
+
+// --- FUNCTIONS IMPLEMENTATION ---
+
+//Command parsing and execution
 
 /*
  * int getCommand(char* command, char* ent1, char* ent2, char* rel)
@@ -206,39 +201,6 @@ int getCommand(char *command, char *ent1, char *ent2, char *rel) {
     while((char)getchar_unlocked() != '\n'){}  //dump any other character. You don't wanna remove this
     return 0;
 }
-
-/*
- * unsigned int hash(char* string, int mult, int mod)
- *
- * just a hash function that hopefully won't need more space than this
- *
- * --- DESCRIPTION ---
- * this is a basic string hashing function, that sums the ASCII values of every single
- * character in the string, each multiplied by the i-th power of a multiplier, where i is the
- * position of the char in the string. Both the multiplayer and the modulus must be prime to
- * ensure an acceptable collision rate, on average
- *
- * --- PARAMETERS ---
- * string: the input string to be analyzed and hashed
- * mult: the multiplier, see above
- * mod: the divider, see below
- *
- * --- RETURN VALUES ---
- * the function returns the remaindr of the division of the weighted sum of the ASCII values and
- * the divider
- */
-
-unsigned int hash(char* string, int mult, int mod) {
-    unsigned long long result = (int)string[1] - '_';
-    int i = 2;
-    while(string[i] != ' ') {
-        //result = mult * (string[i] - '_' + result); //probably exceeds the maximum integer size, should be tested on large strings
-        result = (mult*result + (int)string[i] - '_');
-        i++;
-    }
-    return result % mod;
-}
-
 /*
  * void executeCommand(char* command, char* ent1, char* ent2, char* rel)
  *
@@ -273,13 +235,12 @@ void executeCommand(char* command, char* ent1, char* ent2, char* rel) {
         return;
     }
 }
-
 /*
  * adds a new entity to the table, if absent
  */
 void addEntity(char* entName) {
     unsigned long hashValue = hash(entName, HASH_MULTIPLIER, HASH_SIZE_ENT);
-    t_entity *temp = entityTable[hashValue].address;
+    t_entity *temp = entityTable[hashValue];
 
     while (temp != NULL) {
         if (strcmp(temp->name, entName) == 0) {   //element already exists
@@ -293,17 +254,16 @@ void addEntity(char* entName) {
     t_entity *newEnt = (t_entity*)malloc(sizeof(t_entity));
     strcpy(newEnt->name, entName);
     newEnt->version = 0;
-    newEnt->next = entityTable[hashValue].address;
-    entityTable[hashValue].address = newEnt;
+    newEnt->next = entityTable[hashValue];
+    entityTable[hashValue] = newEnt;
 }
-
 /*
  * looks for an entity. If found, it marks it as deleted changing i
  * its name to "\0", to avoid possible collisions with the other entities names
  */
 void deleteEntity(char* entName){
     unsigned long hashValue = hash(entName, HASH_MULTIPLIER, HASH_SIZE_ENT);
-    t_entity *temp = entityTable[hashValue].address;
+    t_entity *temp = entityTable[hashValue];
 
     while (temp != NULL) {
         if (strcmp(temp->name, entName) == 0) {    //element exists
@@ -315,37 +275,36 @@ void deleteEntity(char* entName){
     }
 }
 
-
 void addRelation(char* orig, char* dest, char* relName) {
     unsigned long hashValue;
 
     hashValue = hash(orig, HASH_MULTIPLIER, HASH_SIZE_ENT);
-    t_entity *senderAddr = getEntityAddr(entityTable[hashValue].address, orig);
+    t_entity *senderAddr = getEntityAddr(entityTable[hashValue], orig);
     hashValue = hash(dest, HASH_MULTIPLIER, HASH_SIZE_ENT);
-    t_entity *recipientAddr = getEntityAddr(entityTable[hashValue].address, dest);
+    t_entity *recipientAddr = getEntityAddr(entityTable[hashValue], dest);
 
     if(senderAddr != NULL && recipientAddr != NULL) {   //checks if the entities have been created
         if (senderAddr->version % 2 == 0 &&
             recipientAddr->version % 2 == 0) {    //checks if the entities have not been deleted
 
             hashValue = hash(relName, HASH_MULTIPLIER, HASH_SIZE_REL);
-            t_relation *temp = relTable[hashValue].address;
+            t_relation *temp = relTable[hashValue];
 
             while (temp != NULL) {
                 if (strcmp(temp->name, relName) == 0) {   //element already exists
-                    temp->root = addTreeNode(temp->root, senderAddr, recipientAddr);
+                    temp->root = addRelationInstance(temp->root, senderAddr, recipientAddr);
                     return;
                 }
-                    temp = temp->next;
+                temp = temp->next;
             }
 
             //adds a new relation type in the hash table
             t_relation *newRel = (t_relation*)malloc(sizeof(t_relation));
             strcpy(newRel->name, relName);
-            newRel->next = relTable[hashValue].address;
-            relTable[hashValue].address = newRel;
+            newRel->next = relTable[hashValue];
+            relTable[hashValue] = newRel;
             newRel->root = NULL;
-            newRel->root = addTreeNode(newRel->root, senderAddr, recipientAddr);
+            newRel->root = addRelationInstance(newRel->root, senderAddr, recipientAddr);
         }
     }
 }
@@ -354,18 +313,18 @@ void deleteRelation(char* orig, char* dest, char* relName) {
     unsigned long hashValue;
 
     hashValue= hash(orig, HASH_MULTIPLIER, HASH_SIZE_ENT);
-    t_entity *senderAddr = getEntityAddr(entityTable[hashValue].address, orig);
+    t_entity *senderAddr = getEntityAddr(entityTable[hashValue], orig);
     hashValue = hash(dest, HASH_MULTIPLIER, HASH_SIZE_ENT);
-    t_entity *recipientAddr = getEntityAddr(entityTable[hashValue].address, dest);
+    t_entity *recipientAddr = getEntityAddr(entityTable[hashValue], dest);
 
     if(senderAddr != NULL && recipientAddr != NULL) {   //checks if the entities have been created
 
         hashValue = hash(relName, HASH_MULTIPLIER, HASH_SIZE_REL);
-        t_relation *temp = relTable[hashValue].address;
+        t_relation *temp = relTable[hashValue];
 
         while (temp != NULL) {
             if (strcmp(temp->name, relName) == 0) {   //element exists
-                delTreeNode(temp->root, senderAddr, recipientAddr);
+                delRelationInstance(temp->root, senderAddr, recipientAddr);
                 return;
             }
             temp = temp->next;
@@ -374,10 +333,13 @@ void deleteRelation(char* orig, char* dest, char* relName) {
 }
 
 void printReport(void) {
-    generatePrintQueues();
+    assemblePrintQueues();
     printOrderedLists();
 
 }
+
+
+//Relation inserion and deletion
 
 t_entity *getEntityAddr(t_entity *source, char *entName) {
     t_entity *temp = source;
@@ -390,7 +352,7 @@ t_entity *getEntityAddr(t_entity *source, char *entName) {
     return NULL;
 }
 
-t_relInstance *addTreeNode(t_relInstance *node, t_entity *sender, t_entity *recipient) {
+t_relInstance *addRelationInstance(t_relInstance *node, t_entity *sender, t_entity *recipient) {
     if (node == NULL) { //the node doesn't exist
         t_relInstance *newNode = (t_relInstance*)malloc(sizeof(t_relInstance));
         newNode->rightChild = NULL;
@@ -407,7 +369,7 @@ t_relInstance *addTreeNode(t_relInstance *node, t_entity *sender, t_entity *reci
 
         return newNode;
     } else if(strcmp(recipient->name, node->recipient->name) < 0) {
-        node->leftChild = addTreeNode(node->leftChild, sender, recipient);
+        node->leftChild = addRelationInstance(node->leftChild, sender, recipient);
         if(getBalance(node) > 1) {
             if(strcmp(node->recipient->name, node->leftChild->recipient->name) < 0)
                 node = rotateLeft(node);
@@ -416,7 +378,7 @@ t_relInstance *addTreeNode(t_relInstance *node, t_entity *sender, t_entity *reci
         }
     }
     else if (strcmp(recipient->name, node->recipient->name) > 0) {
-        node->rightChild = addTreeNode(node->rightChild, sender, recipient);
+        node->rightChild = addRelationInstance(node->rightChild, sender, recipient);
         if (getBalance(node) > 1) {
             if (strcmp(node->recipient->name, node->leftChild->recipient->name) < 0)
                 node = rotateRight(node);
@@ -460,9 +422,7 @@ t_relInstance *addTreeNode(t_relInstance *node, t_entity *sender, t_entity *reci
     return node;
 }
 
-
-
-void delTreeNode(t_relInstance *node, t_entity *sender, t_entity *recipient) {
+void delRelationInstance(t_relInstance *node, t_entity *sender, t_entity *recipient) {
     if (node == NULL) {
         return;
     }
@@ -490,16 +450,18 @@ void delTreeNode(t_relInstance *node, t_entity *sender, t_entity *recipient) {
     }
     else {
         if (strcmp(recipient->name, node->recipient->name) < 0)
-            delTreeNode(node->leftChild, sender, recipient);
+            delRelationInstance(node->leftChild, sender, recipient);
         else if (strcmp(recipient->name, node->recipient->name) > 0)
-            delTreeNode(node->rightChild, sender, recipient);
+            delRelationInstance(node->rightChild, sender, recipient);
     }
 }
+
+//Queue management
 
 void push(t_relationList *relList, t_entity *newEntity) {
     t_senderList *newItem = (t_senderList*)malloc(sizeof(t_senderList));
     newItem->address = newEntity;
-    
+
     newItem->next = relList->senderList;
     relList->senderList = newItem;
 }
@@ -522,9 +484,12 @@ void emptyQueue(t_relationList *relList) {
     }
 }
 
-void getMaxSender(t_relationList *relList, t_relInstance *node, int *currMax) {
+
+//Report printing and support
+
+void getMaxReceivers(t_relationList *relList, t_relInstance *node, int *currMax) {
     if (node != NULL) {
-        getMaxSender(relList, node->rightChild, currMax);
+        getMaxReceivers(relList, node->rightChild, currMax);
 
         if(node->recVersion == node->recipient->version /*&& node->recVersion % 2 == 0*/) {
             int tempCount = countListElements(node->senderList);
@@ -539,7 +504,7 @@ void getMaxSender(t_relationList *relList, t_relInstance *node, int *currMax) {
             }
         }
 
-        getMaxSender(relList, node->leftChild, currMax);
+        getMaxReceivers(relList, node->leftChild, currMax);
     }
 }
 
@@ -554,6 +519,44 @@ int countListElements(t_senderList *head) {
         temp = temp->next;
     }
     return counter;
+}
+
+void assemblePrintQueues() {
+    t_relation *temp;
+    for(int i = 0; i < HASH_SIZE_REL; i++) {
+        temp = relTable[i];
+        while (temp != NULL){
+            t_relationList *newNode = (t_relationList*)malloc(sizeof(t_relationList));
+            newNode->relationAddr = temp;
+            newNode->counter = 0;
+            newNode->senderList = NULL;
+            newNode->next = NULL;
+            getMaxReceivers(newNode, temp->root, &(newNode->counter));
+
+            t_relationList *prev, *curr;
+
+            if (queue != NULL) {
+                prev = NULL;
+                curr = queue;
+                while (curr != NULL && strcmp(newNode->relationAddr->name, curr->relationAddr->name) > 0) {
+                    prev = curr;
+                    curr = curr->next;
+                }
+                if (prev != NULL) {
+                    prev->next = newNode;
+                    newNode->next = curr;
+                }
+                else {
+                    newNode->next = queue;
+                    queue = newNode;
+                }
+            }
+            else {
+                queue = newNode;
+            }
+            temp = temp->next;
+        }
+    }
 }
 
 void printOrderedLists() {
@@ -585,42 +588,13 @@ void printOrderedLists() {
 
 }
 
-void generatePrintQueues() {
-    t_relation *temp;
-    for(int i = 0; i < HASH_SIZE_REL; i++) {
-        temp = relTable[i].address;
-        while (temp != NULL){
-            t_relationList *newNode = (t_relationList*)malloc(sizeof(t_relationList));
-            newNode->relationAddr = temp;
-            newNode->counter = 0;
-            newNode->senderList = NULL;
-            newNode->next = NULL;
-            getMaxSender(newNode, temp->root, &(newNode->counter));
 
-            t_relationList *prev, *curr;
+//AVL support
 
-            if (queue != NULL) {
-                prev = NULL;
-                curr = queue;
-                while (curr != NULL && strcmp(newNode->relationAddr->name, curr->relationAddr->name) > 0) {
-                    prev = curr;
-                    curr = curr->next;
-                }
-                if (prev != NULL) {
-                    prev->next = newNode;
-                    newNode->next = curr;
-                }
-                else {
-                    newNode->next = queue;
-                    queue = newNode;
-                }
-            }
-            else {
-                queue = newNode;
-            }
-            temp = temp->next;
-        }
-    }
+int getBalance(t_relInstance *node) {
+    if (node == NULL)
+        return 0;
+    return getHeight(node->leftChild) - getHeight(node->rightChild);
 }
 
 int getHeight(t_relInstance *node) {
@@ -629,26 +603,17 @@ int getHeight(t_relInstance *node) {
     return node->height;
 }
 
-int getBalance(t_relInstance *node) {
-    if (node == NULL)
-        return 0;
-    return getHeight(node->leftChild) - getHeight(node->rightChild);
+
+//AVL rotation
+
+t_relInstance *doubleRotateLeft(t_relInstance *node) {
+    node->leftChild = rotateRight(node->leftChild);
+    return rotateLeft(node);
 }
 
-int max(int x, int y) {
-    if (x > y)
-        return x;
-    return y;
-}
-
-t_relInstance *rotateRight(t_relInstance *node) {
-    t_relInstance *temp = node->rightChild;
-    node->rightChild = temp->leftChild;
-    temp->leftChild = node;
-
-    node->height = max(getHeight(node->leftChild), getHeight(node->rightChild)) + 1;
-    temp->height = max(getHeight(temp->leftChild), getHeight(node->rightChild)) + 1;
-    return temp;
+t_relInstance *doubleRotateRight(t_relInstance *node) {
+    node->rightChild = rotateLeft(node->rightChild);
+    return rotateRight(node);
 }
 
 t_relInstance *rotateLeft(t_relInstance *node) {
@@ -662,12 +627,51 @@ t_relInstance *rotateLeft(t_relInstance *node) {
     return temp;
 }
 
-t_relInstance *doubleRotateRight(t_relInstance *node) {
-    node->rightChild = rotateLeft(node->rightChild);
-    return rotateRight(node);
+t_relInstance *rotateRight(t_relInstance *node) {
+    t_relInstance *temp = node->rightChild;
+    node->rightChild = temp->leftChild;
+    temp->leftChild = node;
+
+    node->height = max(getHeight(node->leftChild), getHeight(node->rightChild)) + 1;
+    temp->height = max(getHeight(temp->leftChild), getHeight(node->rightChild)) + 1;
+    return temp;
 }
 
-t_relInstance *doubleRotateLeft(t_relInstance *node) {
-    node->leftChild = rotateRight(node->leftChild);
-    return rotateLeft(node);
+
+//misc
+
+int max(int x, int y) {
+    if (x > y)
+        return x;
+    return y;
+}
+/*
+ * unsigned int hash(char* string, int mult, int mod)
+ *
+ * just a hash function that hopefully won't need more space than this
+ *
+ * --- DESCRIPTION ---
+ * this is a basic string hashing function, that sums the ASCII values of every single
+ * character in the string, each multiplied by the i-th power of a multiplier, where i is the
+ * position of the char in the string. Both the multiplayer and the modulus must be prime to
+ * ensure an acceptable collision rate, on average
+ *
+ * --- PARAMETERS ---
+ * string: the input string to be analyzed and hashed
+ * mult: the multiplier, see above
+ * mod: the divider, see below
+ *
+ * --- RETURN VALUES ---
+ * the function returns the remaindr of the division of the weighted sum of the ASCII values and
+ * the divider
+ */
+unsigned int hash(const char* string, int mult, int mod) {
+    unsigned long long result = (int)string[1] - '_';
+    int i = 2;
+    while(string[i] != ' ') {
+        //result = mult * (string[i] - '_' + result); //probably exceeds the maximum integer size, should be tested on large strings
+        result = (mult*result + (int)string[i] - '_');
+        i++;
+    }
+    return result % mod;
 }
