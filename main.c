@@ -33,6 +33,7 @@ typedef struct _relInstance {
     //may need to add father and balancing attributes
 
     t_entity *recipient;
+    int numSenders;
     unsigned short int recVersion;
     t_senderList *senderList;
 } t_relInstance;
@@ -56,6 +57,7 @@ typedef struct _relationList {
 t_entityAddr entityTable[HASH_SIZE_ENT];
 t_relAddr relTable[HASH_SIZE_REL];
 t_relationList *queue;
+int recalcMaxSenders;
 
 // --- FUNCTIONS PROTOTYPES ---
 
@@ -80,7 +82,7 @@ void emptyQueue(t_relationList*);
 
 //Report printing and support
 void getMaxReceivers(t_relationList *relList, t_relInstance *node, int *currMax);
-int countListElements(t_senderList*);
+int countInstanceSenders(t_relInstance*);
 void assemblePrintQueues();
 void printOrderedLists();
 
@@ -100,6 +102,7 @@ unsigned int hash(const char*, int, int);
 
 
 int main(){
+    recalcMaxSenders = 1;
     queue = NULL;
     char command[7],
             entName1[MAX_STRING_SIZE],
@@ -269,6 +272,7 @@ void deleteEntity(char* entName){
         if (strcmp(temp->name, entName) == 0) {    //element exists
             if(temp->version % 2 == 0)
                 temp->version++;
+            recalcMaxSenders = 1;
             return;
         }
         temp = temp->next;
@@ -335,11 +339,11 @@ void deleteRelation(char* orig, char* dest, char* relName) {
 void printReport(void) {
     assemblePrintQueues();
     printOrderedLists();
-
+    recalcMaxSenders = 0;
 }
 
 
-//Relation inserion and deletion
+//Relation insertion and deletion
 
 t_entity *getEntityAddr(t_entity *source, char *entName) {
     t_entity *temp = source;
@@ -359,6 +363,7 @@ t_relInstance *addRelationInstance(t_relInstance *node, t_entity *sender, t_enti
         newNode->leftChild = NULL;
         newNode->recipient = recipient;
         newNode->height = 0;
+        newNode->numSenders = 1;
         newNode->recVersion = recipient->version;
 
         t_senderList *newListNode = (t_senderList*)malloc(sizeof(t_senderList));
@@ -368,6 +373,7 @@ t_relInstance *addRelationInstance(t_relInstance *node, t_entity *sender, t_enti
         newNode->senderList = newListNode;
 
         return newNode;
+
     } else if(strcmp(recipient->name, node->recipient->name) < 0) {
         node->leftChild = addRelationInstance(node->leftChild, sender, recipient);
         if(getBalance(node) > 1) {
@@ -394,17 +400,16 @@ t_relInstance *addRelationInstance(t_relInstance *node, t_entity *sender, t_enti
                 free (node->senderList);
                 node->senderList = temp;
             }
+            node->numSenders = 0;
         }
         t_senderList *temp = node->senderList;
-        if (recipient->version > node->recVersion) {
-            node->recipient->version = recipient->version;
-            node->recVersion = recipient->version;
-        }
+       node->recVersion = recipient->version;
         while (temp != NULL) {
             if (temp->address == sender) {
                 if (sender->version > temp->version) {
                     temp->version = sender->version;
                     temp->address->version = sender->version;
+                    node->numSenders++;
                 }
                 return node;
             }
@@ -415,6 +420,7 @@ t_relInstance *addRelationInstance(t_relInstance *node, t_entity *sender, t_enti
         newSender->version = sender->version;
         newSender->next = node->senderList;
         node->senderList = newSender;
+        node->numSenders++;
         return node;
     }
 
@@ -428,9 +434,12 @@ void delRelationInstance(t_relInstance *node, t_entity *sender, t_entity *recipi
     }
     else if (node->recipient == recipient) {
         t_senderList *curr = node->senderList;
-        if (node->senderList == NULL)
+        if (node->senderList == NULL) {
             return;
+        }
         if(node->senderList->address == sender) {
+            if (node->senderList->version == sender->version && sender->version % 2 == 0)
+                node->numSenders--;
             node->senderList = curr->next;
             free(curr);
             return;
@@ -442,6 +451,8 @@ void delRelationInstance(t_relInstance *node, t_entity *sender, t_entity *recipi
             if(curr->address == sender) {
                 prev->next = curr->next;
                 free(curr);
+                if (node->senderList->version == sender->version && sender->version % 2 == 0)
+                    node->numSenders--;
                 return;
             }
             prev = curr;
@@ -492,7 +503,7 @@ void getMaxReceivers(t_relationList *relList, t_relInstance *node, int *currMax)
         getMaxReceivers(relList, node->rightChild, currMax);
 
         if(node->recVersion == node->recipient->version /*&& node->recVersion % 2 == 0*/) {
-            int tempCount = countListElements(node->senderList);
+            int tempCount = countInstanceSenders(node);
             if(tempCount > 0) {
                 if (tempCount == *(currMax)) {
                     push(relList, node->recipient);
@@ -508,8 +519,10 @@ void getMaxReceivers(t_relationList *relList, t_relInstance *node, int *currMax)
     }
 }
 
-int countListElements(t_senderList *head) {
-    t_senderList *temp = head;
+int countInstanceSenders(t_relInstance *node) {
+    if (recalcMaxSenders != 1)
+        return node->numSenders;
+    t_senderList *temp = node->senderList;
     int counter = 0;
 
     while(temp != NULL) {
@@ -518,6 +531,7 @@ int countListElements(t_senderList *head) {
         }
         temp = temp->next;
     }
+    node->numSenders = counter;
     return counter;
 }
 
@@ -525,7 +539,7 @@ void assemblePrintQueues() {
     t_relation *temp;
     for(int i = 0; i < HASH_SIZE_REL; i++) {
         temp = relTable[i];
-        while (temp != NULL){
+        while (temp != NULL) {
             t_relationList *newNode = (t_relationList*)malloc(sizeof(t_relationList));
             newNode->relationAddr = temp;
             newNode->counter = 0;
