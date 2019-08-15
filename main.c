@@ -108,7 +108,7 @@ int main(){
             entName1[MAX_STRING_SIZE],
             entName2[MAX_STRING_SIZE],
             relName[MAX_STRING_SIZE];
-    //freopen("TestCases/5_MultipleMixup/batch5.2.in", "r", stdin);      //redirecting standard input, used for debugging in CLion
+    //freopen("TestCases/2_Dropoff/batch2.2.in", "r", stdin);      //redirecting standard input, used for debugging in CLion
 
     while(getCommand(command, entName1, entName2, relName) != 1) {
         executeCommand(command, entName1, entName2, relName);
@@ -449,10 +449,10 @@ void delRelationInstance(t_relInstance *node, t_entity *sender, t_entity *recipi
 
         while(curr != NULL) {
             if(curr->address == sender) {
+                if (curr->version == sender->version && sender->version % 2 == 0)
+                    node->numSenders--;
                 prev->next = curr->next;
                 free(curr);
-                if (node->senderList->version == sender->version && sender->version % 2 == 0)
-                    node->numSenders--;
                 return;
             }
             prev = curr;
