@@ -421,7 +421,7 @@ t_relInstance *addRelationInstance(t_relation *rel, t_relInstance *node, t_entit
         newNode->rightChild = NULL;
         newNode->leftChild = NULL;
         newNode->recipient = recipient;
-        newNode->height = 0;
+        newNode->height = 1;
         newNode->numSenders = 1;
         newNode->recVersion = recipient->version;
 
@@ -444,24 +444,13 @@ t_relInstance *addRelationInstance(t_relation *rel, t_relInstance *node, t_entit
 
         return newNode;
 
-    } else if(strcmp(recipient->name, node->recipient->name) < 0) {
+    }
+
+    else if(strcmp(recipient->name, node->recipient->name) < 0)
         node->leftChild = addRelationInstance(rel, node->leftChild, sender, recipient);
-        if(getBalance(node) > 1) {
-            if(strcmp(node->recipient->name, node->leftChild->recipient->name) < 0)
-                node = rotateLeft(node);
-            else
-                node = doubleRotateLeft(node);
-        }
-    }
-    else if (strcmp(recipient->name, node->recipient->name) > 0) {
+    else if (strcmp(recipient->name, node->recipient->name) > 0)
         node->rightChild = addRelationInstance(rel, node->rightChild, sender, recipient);
-        if (getBalance(node) > 1) {
-            if (strcmp(node->recipient->name, node->leftChild->recipient->name) < 0)
-                node = rotateRight(node);
-            else
-                node = doubleRotateRight(node);
-        }
-    }
+
     else {
         if (node->recVersion < recipient->version) {
             t_senderList *temp = node->senderList;
@@ -516,7 +505,25 @@ t_relInstance *addRelationInstance(t_relation *rel, t_relInstance *node, t_entit
         }
         return node;
     }
-    node->height =  max(getHeight(node->rightChild), getHeight(node->leftChild));
+    node->height =  max(getHeight(node->rightChild), getHeight(node->leftChild)) + 1;
+
+    if (getBalance(node) > 1) {
+        if (strcmp(recipient->name, node->leftChild->recipient->name) < 0)
+            return rotateRight(node);
+        else {
+            node->leftChild = rotateLeft(node->leftChild);
+            return rotateRight(node);
+        }
+    }
+    else if (getBalance(node) < -1) {
+        if (strcmp(recipient->name, node->rightChild->recipient->name) > 0)
+            return rotateLeft(node);
+        else {
+            node->rightChild = rotateRight(node->rightChild);
+            return rotateLeft(node);
+        }
+    }
+
     return node;
 }
 
@@ -587,28 +594,33 @@ t_entityTree *addToRecipientTree(t_entityTree *node, t_entity *newEntity) {
         newItem->entity = newEntity;
         newItem->rightChild = NULL;
         newItem->leftChild = NULL;
-        newItem->height = 0;
+        newItem->height = 1;
         return newItem;
     }
-    else if (strcmp(newEntity->name, node->entity->name) < 0) {
+    else if (strcmp(newEntity->name, node->entity->name) < 0)
         node->leftChild = addToRecipientTree(node->leftChild, newEntity);
-        if(ent_getBalance(node) > 1) {
-            if (strcmp(node->entity->name, node->leftChild->entity->name) < 0)
-                node = ent_rotateLeft(node);
-            else
-                node = ent_doubleRotateLeft(node);
-        }
-    }
-    else if (strcmp(newEntity->name, node->entity->name) > 0) {
+    else if (strcmp(newEntity->name, node->entity->name) > 0)
         node->rightChild = addToRecipientTree(node->rightChild, newEntity);
-        if (ent_getBalance(node) > 1) {
-            if(strcmp(node->entity->name, node->leftChild->entity->name) < 0)
-                node = ent_rotateRight(node);
-            else
-                node = ent_doubleRotateRight(node);
+
+    node->height =  max(ent_getHeight(node->rightChild), ent_getHeight(node->leftChild)) + 1;
+
+    if (ent_getBalance(node) > 1) {
+        if (strcmp(newEntity->name, node->leftChild->entity->name) < 0)
+            return ent_rotateRight(node);
+        else {
+            node->leftChild = ent_rotateLeft(node->leftChild);
+            return ent_rotateRight(node);
         }
     }
-    node->height = max(ent_getHeight(node->rightChild), ent_getHeight(node->leftChild));
+    else if (ent_getBalance(node) < -1) {
+        if (strcmp(newEntity->name, node->rightChild->entity->name) > 0)
+            return ent_rotateLeft(node);
+        else {
+            node->rightChild = ent_rotateRight(node->rightChild);
+            return ent_rotateLeft(node);
+        }
+    }
+
     return node;
 }
 
@@ -700,19 +712,19 @@ int rel_getBalance(t_relationTree *node) {
 
 int getHeight(t_relInstance *node) {
     if (node == NULL)
-        return -1;
+        return 0;
     return node->height;
 }
 
 int ent_getHeight(t_entityTree *node) {
     if (node == NULL)
-        return -1;
+        return 0;
     return node->height;
 }
 
 int rel_getHeight(t_relationTree *node) {
     if (node == NULL)
-        return -1;
+        return 0;
     return node->height;
 }
 
@@ -767,67 +779,76 @@ t_relationTree *rel_doubleRotateRight(t_relationTree *node) {
 
 
 t_relInstance *rotateLeft(t_relInstance *node) {
-    t_relInstance *temp = node->leftChild;
-    node->leftChild = temp->rightChild;
-    temp->rightChild = node;
+    t_relInstance *ret = node->rightChild;
+    t_relInstance *temp = ret->leftChild;
+
+    ret->leftChild = node;
+    node->rightChild = temp;
 
     node->height = max(getHeight(node->leftChild), getHeight(node->rightChild)) + 1;
-    temp->height = max(getHeight(temp->leftChild), getHeight(node->rightChild)) + 1;
-
-    return temp;
+    ret->height = max(getHeight(ret->leftChild), getHeight(ret->rightChild)) + 1;
+    return ret;
 }
 
 t_entityTree *ent_rotateLeft(t_entityTree *node) {
-    t_entityTree *temp = node->leftChild;
-    node->leftChild = temp->rightChild;
-    temp->rightChild = node;
+    t_entityTree *ret = node->rightChild;
+    t_entityTree *temp = ret->leftChild;
+
+    ret->leftChild = node;
+    node->rightChild = temp;
 
     node->height = max(ent_getHeight(node->leftChild), ent_getHeight(node->rightChild)) + 1;
-    temp->height = max(ent_getHeight(temp->leftChild), ent_getHeight(node->rightChild)) + 1;
-
-    return temp;
+    ret->height = max(ent_getHeight(ret->leftChild), ent_getHeight(ret->rightChild)) + 1;
+    return ret;
 }
 
 t_relationTree *rel_rotateLeft(t_relationTree *node) {
-    t_relationTree *temp = node->leftChild;
-    node->leftChild = temp->rightChild;
-    temp->rightChild = node;
+    t_relationTree *ret = node->rightChild;
+    t_relationTree *temp = ret->leftChild;
+
+    ret->leftChild = node;
+    node->rightChild = temp;
 
     node->height = max(rel_getHeight(node->leftChild), rel_getHeight(node->rightChild)) + 1;
-    temp->height = max(rel_getHeight(temp->leftChild), rel_getHeight(node->rightChild)) + 1;
-
-    return temp;
+    ret->height = max(rel_getHeight(ret->leftChild), rel_getHeight(ret->rightChild)) + 1;
+    return ret;
 }
 
 
 t_relInstance *rotateRight(t_relInstance *node) {
-    t_relInstance *temp = node->rightChild;
-    node->rightChild = temp->leftChild;
-    temp->leftChild = node;
+    t_relInstance *ret = node->leftChild;
+    t_relInstance *temp = ret->rightChild;
+
+    ret->rightChild = node;
+    node->leftChild = temp;
 
     node->height = max(getHeight(node->leftChild), getHeight(node->rightChild)) + 1;
-    temp->height = max(getHeight(temp->leftChild), getHeight(node->rightChild)) + 1;
-    return temp;
+    ret->height = max(getHeight(ret->leftChild), getHeight(ret->rightChild)) + 1;
+    return ret;
 }
 
 t_entityTree *ent_rotateRight(t_entityTree *node) {
-    t_entityTree *temp = node->rightChild;
-    node->rightChild = temp->leftChild;
-    temp->leftChild = node;
+    t_entityTree *ret = node->leftChild;
+    t_entityTree *temp = ret->rightChild;
+
+    ret->rightChild = node;
+    node->leftChild = temp;
 
     node->height = max(ent_getHeight(node->leftChild), ent_getHeight(node->rightChild)) + 1;
-    temp->height = max(ent_getHeight(temp->leftChild), ent_getHeight(node->rightChild)) + 1;
-    return temp;
+    ret->height = max(ent_getHeight(ret->leftChild), ent_getHeight(ret->rightChild)) + 1;
+    return ret;
 }
 
 t_relationTree *rel_rotateRight(t_relationTree *node) {
-    t_relationTree *temp = node->rightChild;
-    node->rightChild = temp->leftChild;
-    temp->leftChild = node;
+    t_relationTree *ret = node->leftChild;
+    t_relationTree *temp = ret->rightChild;
+
+    ret->rightChild = node;
+    node->leftChild = temp;
 
     node->height = max(rel_getHeight(node->leftChild), rel_getHeight(node->rightChild)) + 1;
-    temp->height = max(rel_getHeight(temp->leftChild), rel_getHeight(node->rightChild)) + 1;
-    return temp;
+    ret->height = max(rel_getHeight(ret->leftChild), rel_getHeight(ret->rightChild)) + 1;
+    return ret;
 }
 
 
@@ -908,7 +929,7 @@ t_relationTree *addToRelTree(t_relationTree *node, t_relation *newRel) {
         t_relationTree *newNode = (t_relationTree *) malloc(sizeof(t_relationTree));
         newNode->rightChild = NULL;
         newNode->leftChild = NULL;
-        newNode->height = 0;
+        newNode->height = 1;
         newNode->relation = newRel;
         return newNode;
     }
