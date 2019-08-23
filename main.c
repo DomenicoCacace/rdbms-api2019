@@ -27,6 +27,15 @@ typedef struct _senderList {
     struct _senderList *next;
 } t_senderList;
 
+typedef struct _entityTree {
+    struct _entityTree *rightChild;
+    struct _entityTree *leftChild;
+    int height;
+
+    t_entity *entity;
+    int version;
+} t_entityTree;
+
 typedef struct _relInstance {
     struct _relInstance *rightChild;
     struct _relInstance *leftChild;
@@ -35,16 +44,8 @@ typedef struct _relInstance {
     t_entity *recipient;
     int numSenders;
     unsigned short int recVersion;
-    t_senderList *senderList;
+    t_entityTree *senderList;
 } t_relInstance;
-
-typedef struct _entityTree {
-    struct _entityTree *rightChild;
-    struct _entityTree *leftChild;
-    int height;
-
-    t_entity *entity;
-} t_entityTree;
 
 typedef struct _relation {
     char name[MAX_STRING_SIZE];
@@ -135,13 +136,16 @@ int max(int, int);
 unsigned int hash(const char*, int, int);
 void refreshFlags(t_relationTree *node);
 
+t_entityTree *addSender(t_entityTree*, t_entity*, int*);
+t_entityTree *delSender(t_entityTree*, t_entity*, int*);
+int countTreeNodes (t_entityTree*);
 
 int main(){
     char command[7],
             entName1[MAX_STRING_SIZE],
             entName2[MAX_STRING_SIZE],
             relName[MAX_STRING_SIZE];
-    //freopen("TestCases/6_MultipleRepeated/batch6.2.in", "r", stdin);      //redirecting standard input, used for debugging in CLion
+      //freopen("TestCases/3_Mixup/batch3.1.in", "r", stdin);      //redirecting standard input, used for debugging in CLion
 
     while(getCommand(command, entName1, entName2, relName) != 1) {
         executeCommand(command, entName1, entName2, relName);
@@ -343,7 +347,7 @@ void addRelation(char* orig, char* dest, char* relName) {
             relTable[hashValue] = newRel;
 
             newRel->root = NULL;
-            newRel->maxSenders = 0;
+            newRel->maxSenders = -1;
             newRel->recipients = NULL;
             newRel->recalc = false;
             newRel->root = addRelationInstance(newRel, newRel->root, senderAddr, recipientAddr);
@@ -422,22 +426,23 @@ t_relInstance *addRelationInstance(t_relation *rel, t_relInstance *node, t_entit
         newNode->leftChild = NULL;
         newNode->recipient = recipient;
         newNode->height = 1;
-        newNode->numSenders = 1;
+        newNode->numSenders = 0;
+        newNode->senderList = NULL;
         newNode->recVersion = recipient->version;
 
-        t_senderList *newListNode = (t_senderList*)malloc(sizeof(t_senderList));
-        newListNode->address = sender;
-        newListNode->version = sender->version;
-        newListNode->next = NULL;
-        newNode->senderList = newListNode;
+        int hasBeenAdded = 0;
+        newNode->senderList = addSender(newNode->senderList, sender, &hasBeenAdded);
 
+        newNode->numSenders++;
         recipient->relations = addToRelTree(recipient->relations, rel);
         sender->relations = addToRelTree(sender->relations, rel);
+
 
         if (rel->maxSenders == newNode->numSenders)
             rel->recipients = addToRecipientTree(rel->recipients, recipient);
         else if (newNode->numSenders > rel->maxSenders) {
             rel->recipients = delTree(rel->recipients);
+            rel->recipients = NULL;
             rel->recipients = addToRecipientTree(rel->recipients, recipient);
             rel->maxSenders = newNode->numSenders;
         }
@@ -453,55 +458,31 @@ t_relInstance *addRelationInstance(t_relation *rel, t_relInstance *node, t_entit
 
     else {
         if (node->recVersion < recipient->version) {
-            t_senderList *temp = node->senderList;
-            while (temp != NULL) {
-                temp = temp->next;
-                free (node->senderList);
-                node->senderList = temp;
-            }
-
-            if(node->numSenders == rel->maxSenders)
+            node->senderList = delTree(node->senderList);
+            node->senderList = NULL;
+            if(node->numSenders == rel->maxSenders) {
                 rel->recipients = delItem(rel->recipients, recipient);
-            node->numSenders = 0;
-        }
-
-        t_senderList *temp = node->senderList;
-        node->recVersion = recipient->version;
-        while (temp != NULL) {
-            if (temp->address == sender) {
-                if (sender->version > temp->version) {
-                    temp->version = sender->version;
-                    node->numSenders++;
-
-                    if (rel->maxSenders == node->numSenders)
-                        rel->recipients = addToRecipientTree(rel->recipients, recipient);
-                    else if (node->numSenders > rel->maxSenders) {
-                        rel->recipients = delTree(rel->recipients);
-                        rel->recipients = addToRecipientTree(rel->recipients, recipient);
-                        rel->maxSenders = node->numSenders;
-                    }
-                    sender->relations = addToRelTree(sender->relations, rel);
-                }
-                return node;
+                if (rel->recipients == NULL)
+                    rel->recalc = true;
             }
-            temp = temp->next;
+            node->numSenders = 0;
+            node->recVersion = recipient->version;
         }
 
-        recipient->relations = addToRelTree(recipient->relations, rel);
-        sender->relations = addToRelTree(sender->relations, rel);
-        t_senderList *newSender = (t_senderList*)malloc(sizeof(t_senderList));
-        newSender->address = sender;
-        newSender->version = sender->version;
-        newSender->next = node->senderList;
-        node->senderList = newSender;
-        node->numSenders++;
-
-        if (rel->maxSenders == node->numSenders)
-            rel->recipients = addToRecipientTree(rel->recipients, recipient);
-        else if (node->numSenders > rel->maxSenders) {
-            rel->recipients = delTree(rel->recipients);
-            rel->recipients = addToRecipientTree(rel->recipients, recipient);
-            rel->maxSenders = node->numSenders;
+        int hasBeenAdded = 0;
+        node->senderList = addSender(node->senderList, sender, &hasBeenAdded);
+        if (hasBeenAdded == 1) {
+            node->numSenders++;
+            if (rel->maxSenders == node->numSenders)
+                rel->recipients = addToRecipientTree(rel->recipients, recipient);
+            else if (node->numSenders > rel->maxSenders)/*&&!ecakc*/ {
+                rel->recipients = delTree(rel->recipients);
+                rel->recipients = NULL;
+                rel->recipients = addToRecipientTree(rel->recipients, recipient);
+                rel->maxSenders = node->numSenders;
+            }
+            sender->relations = addToRelTree(sender->relations, rel);
+            recipient->relations = addToRelTree(recipient->relations, rel);
         }
         return node;
     }
@@ -531,51 +512,19 @@ void delRelationInstance(t_relation *rel, t_relInstance *node, t_entity *sender,
     if (node == NULL) {
         return;
     }
-    else if (node->recipient == recipient) {
-        t_senderList *curr = node->senderList;
-        if (node->senderList == NULL) {
-            return;
-        }
+    if (node->recipient == recipient) {
+        int hasBeenDeleted = 0;
+        node->senderList = delSender(node->senderList, sender, &hasBeenDeleted);
 
-        if(node->senderList->address == sender) {
-            if (node->senderList->version == sender->version && sender->version % 2 == 0) {
-                if (node->numSenders == rel->maxSenders) {
-                    rel->recipients = delItem(rel->recipients, recipient);
-                    if (rel->recipients == NULL) {
-                        rel->maxSenders = -1;
-                        rel->recalc = true;
-                    }
+        if (hasBeenDeleted == 1) {
+            if (node->numSenders == rel->maxSenders) {
+                rel->recipients = delItem(rel->recipients, recipient);
+                if (rel->recipients == NULL) {
+                    rel->maxSenders = 0;
+                    rel->recalc = true;
                 }
-                node->numSenders--;
             }
-
-            node->senderList = curr->next;
-            free(curr);
-           return;
-        }
-        t_senderList *prev = curr;
-        curr = curr->next;
-
-        while(curr != NULL) {
-            if(curr->address == sender) {
-
-                if (curr->version == sender->version && sender->version % 2 == 0) {
-                    if (node->numSenders == rel->maxSenders) {
-                        rel->recipients = delItem(rel->recipients, recipient);
-
-                        if (rel->recipients == NULL) {
-                            rel->maxSenders = -1;
-                            rel->recalc = true;
-                        }
-                    }
-                    node->numSenders--;
-                }
-                prev->next = curr->next;
-                free(curr);
-                return;
-            }
-            prev = curr;
-            curr = curr->next;
+            node->numSenders--;
         }
     }
     else {
@@ -584,6 +533,7 @@ void delRelationInstance(t_relation *rel, t_relInstance *node, t_entity *sender,
         else if (strcmp(recipient->name, node->recipient->name) > 0)
             delRelationInstance(rel, node->rightChild, sender, recipient);
     }
+
 }
 
 //Queue management
@@ -594,6 +544,7 @@ t_entityTree *addToRecipientTree(t_entityTree *node, t_entity *newEntity) {
         newItem->entity = newEntity;
         newItem->rightChild = NULL;
         newItem->leftChild = NULL;
+        newItem->version = newEntity->version;
         newItem->height = 1;
         return newItem;
     }
@@ -603,6 +554,7 @@ t_entityTree *addToRecipientTree(t_entityTree *node, t_entity *newEntity) {
         node->rightChild = addToRecipientTree(node->rightChild, newEntity);
 
     node->height =  max(ent_getHeight(node->rightChild), ent_getHeight(node->leftChild)) + 1;
+
 
     if (ent_getBalance(node) > 1) {
         if (strcmp(newEntity->name, node->leftChild->entity->name) < 0)
@@ -640,24 +592,42 @@ t_entityTree *delItem(t_entityTree *node, t_entity *entity) {
                 temp = node;
                 node = NULL;
             }
-            else   //only one child
+            else {   //only one child
                 *node = *temp;
-
+                /*node->entity = temp->entity;
+                node->version = temp->version;*/
+            }
             free(temp);
         }
         else {
             t_entityTree *temp = ent_minValueNode(node->rightChild);
             node->entity = temp->entity;
+            node->version = temp->version;
             node->rightChild = delItem(node->rightChild, temp->entity);
         }
     }
 
-
-
     if (node == NULL)
         return node;
 
-    node->height = max(ent_getHeight(node->rightChild), ent_getHeight(node->leftChild));
+    node->height = max(ent_getHeight(node->rightChild), ent_getHeight(node->leftChild)) + 1;
+
+    if (ent_getBalance(node) > 1) {
+        if (ent_getBalance(node->leftChild) >= 0)
+            return ent_rotateRight(node);
+        else {
+            node->leftChild = ent_rotateLeft(node->leftChild);
+            return ent_rotateRight(node);
+        }
+    }
+    else if (ent_getBalance(node) < -1) {
+        if (ent_getBalance(node->rightChild) <= 0)
+            return ent_rotateLeft(node);
+        else {
+            node->rightChild = ent_rotateRight(node->rightChild);
+            return ent_rotateLeft(node);
+        }
+    }
     return node;
 }
 
@@ -675,18 +645,8 @@ t_entityTree *delTree(t_entityTree *node) {
 int countInstanceSenders(t_relation *rel, t_relInstance *node) {
     if (rel->recalc == false)
         return node->numSenders;
+    return countTreeNodes(node->senderList);
 
-    t_senderList *temp = node->senderList;
-    int counter = 0;
-
-    while(temp != NULL) {
-        if(temp->version == temp->address->version && temp->version % 2 == 0) {
-            counter++;
-        }
-        temp = temp->next;
-    }
-    node->numSenders = counter;
-    return counter;
 }
 
 
@@ -895,16 +855,16 @@ void recalcRecipients(t_relation *rel, t_relInstance *node) {
         recalcRecipients(rel, node->rightChild);
 
         if (node->recVersion == node->recipient->version) {
-            int tempCount = countInstanceSenders(rel, node);
-            if (tempCount > 0) {
-                if (tempCount == rel->maxSenders) {
+            node->numSenders = countInstanceSenders(rel, node);
+            if (node->numSenders > 0) {
+                if (node->numSenders == rel->maxSenders) {
                     rel->recipients = addToRecipientTree(rel->recipients, node->recipient);
                 }
-                else if (tempCount > rel->maxSenders) {
-                    delTree(rel->recipients);
+                else if (node->numSenders > rel->maxSenders) {
+                    rel->recipients = delTree(rel->recipients);
                     rel->recipients = NULL;
                     rel->recipients = addToRecipientTree(rel->recipients, node->recipient);
-                    rel->maxSenders = tempCount;
+                    rel->maxSenders = node->numSenders;
                 }
             }
         }
@@ -933,33 +893,158 @@ t_relationTree *addToRelTree(t_relationTree *node, t_relation *newRel) {
         newNode->relation = newRel;
         return newNode;
     }
-    else if (strcmp(newRel->name, node->relation->name) < 0) {
+    else if (strcmp(newRel->name, node->relation->name) < 0)
         node->leftChild = addToRelTree(node->leftChild, newRel);
-        if (rel_getBalance(node) > 1) {
-            if (strcmp(node->relation->name, node->leftChild->relation->name) < 0)
-                node = rel_rotateLeft(node);
-            else
-                node = rel_doubleRotateLeft(node);
-        }
-    }
-    else if (strcmp(newRel->name, node->relation->name) > 0) {
+    else if (strcmp(newRel->name, node->relation->name) > 0)
         node->rightChild = addToRelTree(node->rightChild, newRel);
-        if (rel_getBalance(node) > 1) {
-            if (strcmp(node->relation->name, node->leftChild->relation->name) < 0)
-                node = rel_rotateRight(node);
-            else
-                node = rel_doubleRotateRight(node);
+
+    node->height = max(rel_getHeight(node->rightChild), rel_getHeight(node->leftChild)) + 1;
+
+    if (rel_getBalance(node) > 1) {
+        if (strcmp(newRel->name, node->leftChild->relation->name) < 0)
+            return rel_rotateRight(node);
+        else {
+            node->leftChild = rel_rotateLeft(node->leftChild);
+            return rel_rotateRight(node);
         }
     }
-    node->height = max(rel_getHeight(node->rightChild), rel_getHeight(node->leftChild));
+    else if (rel_getBalance(node) < -1) {
+        if (strcmp(newRel->name, node->rightChild->relation->name) > 0)
+            return rel_rotateLeft(node);
+        else {
+            node->rightChild = rel_rotateRight(node->rightChild);
+            return rel_rotateLeft(node);
+        }
+    }
+
     return node;
 }
 
 void refreshFlags(t_relationTree *node) {
     if (node == NULL)
         return;
+    node->relation->recalc = true;
     refreshFlags(node->leftChild);
     refreshFlags(node->rightChild);
-    node->relation->recalc = true;
+}
 
+t_entityTree *addSender(t_entityTree *node, t_entity *sender, int *flag) {
+    if (node == NULL && *(flag) == 0) { //the node doesn't exist
+        t_entityTree *newSender = (t_entityTree*) malloc(sizeof(t_entityTree));
+        newSender->rightChild = NULL;
+        newSender->leftChild = NULL;
+        newSender->height = 1;
+        newSender->entity = sender;
+        newSender->version = sender->version;
+
+        *(flag) = 1;
+        return newSender;
+    }
+
+    else if(strcmp(sender->name, node->entity->name) < 0)
+        node->leftChild = addSender(node->leftChild, sender, flag);
+    else if (strcmp(sender->name, node->entity->name) > 0)
+        node->rightChild = addSender(node->rightChild, sender, flag);
+
+    else {
+        if (node->version < sender->version) {
+            node->version = sender->version;
+            *(flag) = 1;
+        }
+        return node;
+    }
+
+    node->height = max(ent_getHeight(node->rightChild), ent_getHeight(node->leftChild)) + 1;
+
+    if (ent_getBalance(node) > 1) {
+        if (strcmp(sender->name, node->leftChild->entity->name) < 0)
+            return ent_rotateRight(node);
+        else {
+            node->leftChild = ent_rotateLeft(node->leftChild);
+            return ent_rotateRight(node);
+        }
+    }
+    else if (ent_getBalance(node) < -1) {
+        if (strcmp(sender->name, node->rightChild->entity->name) > 0)
+            return ent_rotateLeft(node);
+        else {
+            node->rightChild = ent_rotateRight(node->rightChild);
+            return ent_rotateLeft(node);
+        }
+    }
+
+    return node;
+}
+
+t_entityTree *delSender(t_entityTree *node, t_entity *sender, int *flag) {
+    if (node == NULL)
+        return node;
+
+
+    if (strcmp(sender->name, node->entity->name) < 0)
+        node->leftChild = delSender(node->leftChild, sender, flag);
+    else if (strcmp(sender->name, node->entity->name) > 0)
+        node->rightChild = delSender(node->rightChild, sender, flag);
+    else {
+        if (*flag == 0) {
+            *flag = -1;
+            if (node->version == node->entity->version && node->version % 2 == 0) {
+                *(flag) = 1;
+            }
+        }
+
+
+        if (node->leftChild == NULL || node->rightChild == NULL) {
+            t_entityTree *temp = node->leftChild ? node->leftChild : node->rightChild;
+            if (temp == NULL) {
+                temp = node;
+                node = NULL;
+            }
+            else
+                *node = *temp;
+
+            free(temp);
+        }
+        else {
+            t_entityTree *temp = ent_minValueNode(node->rightChild);
+            node->entity = temp->entity;
+            node->version = temp->version;
+            node->rightChild = delSender(node->rightChild, temp->entity, flag);
+        }
+    }
+
+    if (node == NULL)
+        return node;
+
+    node->height =  max(ent_getHeight(node->rightChild), ent_getHeight(node->leftChild)) + 1;
+
+    if (ent_getBalance(node) > 1) {
+        if (ent_getBalance(node->leftChild) >= 0)
+            return ent_rotateRight(node);
+        else {
+            node->leftChild = ent_rotateLeft(node->leftChild);
+            return ent_rotateRight(node);
+        }
+    }
+    else if (ent_getBalance(node) < -1) {
+        if (ent_getBalance(node->rightChild) <= 0)
+            return ent_rotateLeft(node);
+        else {
+            node->rightChild = ent_rotateRight(node->rightChild);
+            return ent_rotateLeft(node);
+        }
+    }
+
+    return node;
+}
+
+int countTreeNodes (t_entityTree *node) {
+    if (node == NULL)
+        return 0;
+    int count = 0;
+    if (node->entity->version == node->version && node->version % 2 == 0)
+        count++;
+
+    count+=(countTreeNodes(node->leftChild) + countTreeNodes(node->rightChild));
+    return count;
 }
