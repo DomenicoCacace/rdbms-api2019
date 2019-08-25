@@ -145,7 +145,7 @@ int main(){
             entName1[MAX_STRING_SIZE],
             entName2[MAX_STRING_SIZE],
             relName[MAX_STRING_SIZE];
-      //freopen("TestCases/3_Mixup/batch3.1.in", "r", stdin);      //redirecting standard input, used for debugging in CLion
+    //freopen("TestCases/3_Mixup/batch3.1.in", "r", stdin);      //redirecting standard input, used for debugging in CLion
 
     while(getCommand(command, entName1, entName2, relName) != 1) {
         executeCommand(command, entName1, entName2, relName);
@@ -183,7 +183,7 @@ int getCommand(char *command, char *ent1, char *ent2, char *rel) {
     int i = 0;
 
     for(i = 0; i < 6; i++)  //reading the first 6 chatacters, containing the command
-        command[i] = (char)getchar_unlocked();
+        command[i] = (char)getc_unlocked(stdin);
     command[6] = '\0';
 
     if(command[0] == 'e' &&   //if it encounters the last line, it cannot compare strings with
@@ -198,12 +198,12 @@ int getCommand(char *command, char *ent1, char *ent2, char *rel) {
 
 
     if(strcmp(command, "report") != 0){ //if the command is not a report, it requires at least one attribute to work
-        getchar_unlocked();  //dump the space and quote before the attribute
-        getchar_unlocked();  //not very elegant, but it works
+        getc_unlocked(stdin);  //dump the space and quote before the attribute
+        getc_unlocked(stdin);  //not very elegant, but it works
         i = 1;
         ent1[0] = '"';
         do {
-            ent1[i] = (char)getchar_unlocked();
+            ent1[i] = (char)getc_unlocked(stdin);
             i++;
         } while(ent1[i-1] != '"');
         ent1[i-1] = '"';
@@ -211,24 +211,24 @@ int getCommand(char *command, char *ent1, char *ent2, char *rel) {
         ent1[i+1] = '\0';
 
         if ((strcmp(command, "addrel") == 0) || (strcmp(command, "delrel") == 0)) { //if the command works on relatonships, it needs all three attributes
-            getchar_unlocked();
-            getchar_unlocked();
+            getc_unlocked(stdin);
+            getc_unlocked(stdin);
             i = 1;
             ent2[0] = '"';
             do {
-                ent2[i] = (char)getchar_unlocked();
+                ent2[i] = (char)getc_unlocked(stdin);
                 i++;
             } while(ent2[i-1] != '"');
             ent2[i-1] = '"';
             ent2[i] = ' ';
             ent2[i+1] = '\0';
 
-            getchar_unlocked();
-            getchar_unlocked();
+            getc_unlocked(stdin);
+            getc_unlocked(stdin);
             i = 1;
             rel[0] = '"';
             do {
-                rel[i] = (char)getchar_unlocked();
+                rel[i] = (char)getc_unlocked(stdin);
                 i++;
             } while(rel[i-1] != '"');
             rel[i-1] = '"';
@@ -237,7 +237,7 @@ int getCommand(char *command, char *ent1, char *ent2, char *rel) {
         }
     }
 
-    while((char)getchar_unlocked() != '\n'){}  //dump any other character. You don't wanna remove this
+    while((char)getc_unlocked(stdin) != '\n'){}  //dump any other character. You don't wanna remove this
     return 0;
 }
 /*
@@ -309,8 +309,8 @@ void deleteEntity(char* entName){
         if (strcmp(temp->name, entName) == 0) {    //element exists
             if(temp->version % 2 == 0) {
                 temp->version++;
+                refreshFlags(temp->relations);
             }
-            refreshFlags(temp->relations);
             return;
         }
         temp = temp->next;
@@ -384,8 +384,8 @@ void printReport() {
     int count = 0;
     count = printRelations(relRoot);
     if (count == 0)
-        fputs("none", stdout);
-    fputs("\n", stdout);
+        fputs_unlocked("none", stdout);
+    fputs_unlocked("\n", stdout);
 }
 
 int printRelations(t_relationTree *node) {
@@ -636,8 +636,8 @@ t_entityTree *delTree(t_entityTree *node) {
         return NULL;
     node->leftChild = delTree(node->leftChild);
     node->rightChild = delTree(node->rightChild);
-     free(node);
-     return NULL;
+    free(node);
+    return NULL;
 }
 
 
@@ -700,7 +700,7 @@ void ent_printTree (t_entityTree *node) {
     if (node == NULL)
         return;
     ent_printTree(node->leftChild);
-    fputs(node->entity->name, stdout);
+    fputs_unlocked(node->entity->name, stdout);
     ent_printTree(node->rightChild);
 }
 
@@ -878,7 +878,7 @@ int printSingleReport(t_relation *relation) {
         return 0;
     if (relation->maxSenders < 0)
         return 1;
-    fputs(relation->name, stdout);
+    fputs_unlocked(relation->name, stdout);
     ent_printTree(relation->recipients);
     printf("%d; ", relation->maxSenders);
     return 1;
